@@ -158,7 +158,8 @@ Get information about the current user. No parameters required.
 ```
 
 ### search_opportunities
-Search for Salesforce opportunities with precise name and account matching.
+Search for Salesforce opportunities using flexible criteria and pattern matching. This tool provides comprehensive search capabilities to help you find specific opportunities or analyze opportunity trends.
+
 ```typescript
 {
   namePattern?: string;         // Optional: Pattern to match in Opportunity Name
@@ -173,14 +174,45 @@ Search for Salesforce opportunities with precise name and account matching.
   pageNumber?: number;         // Optional: Page number to retrieve (default: 1)
 }
 ```
-Example:
+
+Key Features:
+- Pattern-based searching for names and descriptions
+- Stage-specific filtering
+- Amount range filtering
+- Date range filtering for close dates
+- Built-in pagination support
+
+Examples:
+
+1. Basic Name Search:
 ```javascript
 {
   "namePattern": "Cloud Migration",
-  "accountNamePattern": "Tech Corp",
   "stage": "Proposal"
 }
 ```
+
+2. Complex Search:
+```javascript
+{
+  "accountNamePattern": "Tech",
+  "minAmount": 50000,
+  "stage": "Negotiation",
+  "closeDateStart": "2023-01-01",
+  "closeDateEnd": "2023-12-31"
+}
+```
+
+3. Paginated Results:
+```javascript
+{
+  "stage": "Closed Won",
+  "pageSize": 10,
+  "pageNumber": 1
+}
+```
+
+The tool returns opportunities that match ALL specified criteria (AND logic). Results are ordered by close date and include key opportunity details such as name, account, amount, and stage.
 
 ### get_opportunity_details
 Get comprehensive details about a specific opportunity including related records and history.
