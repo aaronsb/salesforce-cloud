@@ -160,6 +160,11 @@ Get information about the current user. No parameters required.
 ### search_opportunities
 Search for Salesforce opportunities using flexible criteria and pattern matching. This tool provides comprehensive search capabilities to help you find specific opportunities or analyze opportunity trends.
 
+Here's an example of the tool in action:
+
+![Search Opportunities Example](screenshot.png)
+
+
 ```typescript
 {
   namePattern?: string;         // Optional: Pattern to match in Opportunity Name
