@@ -1,0 +1,27 @@
+{
+  "name": "salesforce-cloud",
+  "version": "0.1.0",
+  "description": "A Model Context Protocol server for Salesforce",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "salesforce-cloud": "./build/index.js"
+  },
+  "files": [
+    "build"
+  ],
+  "scripts": {
+    "build": "tsc && node -e \"require('fs').chmodSync('build/index.js', '755')\"",
+    "prepare": "npm run build",
+    "watch": "tsc --watch",
+    "inspector": "npx @modelcontextprotocol/inspector build/index.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "0.6.0",
+    "jsforce": "^3.6.3"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.24",
+    "typescript": "^5.3.3"
+  }
+}
