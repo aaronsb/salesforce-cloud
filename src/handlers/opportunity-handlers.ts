@@ -15,7 +15,9 @@ function isGetOpportunityDetailsParams(obj: any): obj is GetOpportunityDetailsPa
 }
 
 interface SearchOpportunitiesParams extends PaginationParams {
-  searchTerm?: string;
+  namePattern?: string;
+  accountNamePattern?: string;
+  descriptionPattern?: string;
   stage?: string;
   minAmount?: number;
   maxAmount?: number;
@@ -25,9 +27,13 @@ interface SearchOpportunitiesParams extends PaginationParams {
 
 function isSearchOpportunitiesParams(obj: any): obj is SearchOpportunitiesParams {
   if (typeof obj !== 'object' || obj === null) return false;
-  
-  // Validate optional parameters if they exist
-  if ('searchTerm' in obj && typeof obj.searchTerm !== 'string') return false;
+
+  // Validate string patterns
+  if ('namePattern' in obj && typeof obj.namePattern !== 'string') return false;
+  if ('accountNamePattern' in obj && typeof obj.accountNamePattern !== 'string') return false;
+  if ('descriptionPattern' in obj && typeof obj.descriptionPattern !== 'string') return false;
+
+  // Validate other parameters
   if ('stage' in obj && typeof obj.stage !== 'string') return false;
   if ('minAmount' in obj && typeof obj.minAmount !== 'number') return false;
   if ('maxAmount' in obj && typeof obj.maxAmount !== 'number') return false;
@@ -35,6 +41,22 @@ function isSearchOpportunitiesParams(obj: any): obj is SearchOpportunitiesParams
   if ('closeDateEnd' in obj && typeof obj.closeDateEnd !== 'string') return false;
 
   return true;
+}
+
+function sanitizeSearchPattern(pattern: string): string {
+  // Escape special SOQL characters
+  return pattern
+    .replace(/'/g, "\\'")
+    .replace(/\\/g, "\\\\")
+    .replace(/%/g, "\\%")
+    .replace(/_/g, "\\_")
+    .trim();
+}
+
+function buildNameMatchCondition(field: string, pattern: string): string {
+  const sanitizedPattern = sanitizeSearchPattern(pattern);
+  // Use word boundaries for more precise matching
+  return `(${field} LIKE '% ${sanitizedPattern}%' OR ${field} LIKE '${sanitizedPattern}%')`;
 }
 
 export async function handleGetOpportunityDetails(client: SalesforceClient, args: any) {
@@ -146,54 +168,100 @@ export async function handleSearchOpportunities(client: SalesforceClient, args: 
     );
   }
 
-  let query = 'SELECT Id, Name, Amount, StageName, CloseDate, AccountId, Account.Name, OwnerId, Owner.Name FROM Opportunity';
+  // Build WHERE conditions
+  const conditions = [];
 
-  // Build WHERE clause
-  let conditions = [];
-
-  // Add search conditions based on provided parameters
-  if (args.searchTerm) {
-    const escapedTerm = args.searchTerm.replace(/'/g, "\\'");
-    conditions.push(`(Name LIKE '%${escapedTerm}%' OR Account.Name LIKE '%${escapedTerm}%')`);
+  // Add search conditions if provided
+  if (args.namePattern) {
+    conditions.push(buildNameMatchCondition('Name', args.namePattern));
   }
-
+  if (args.accountNamePattern) {
+    conditions.push(buildNameMatchCondition('Account.Name', args.accountNamePattern));
+  }
   if (args.stage) {
-    conditions.push(`StageName = '${args.stage}'`);
+    const sanitizedStage = sanitizeSearchPattern(args.stage);
+    conditions.push(`StageName = '${sanitizedStage}'`);
   }
 
-  if (args.minAmount) {
-    conditions.push(`Amount >= ${args.minAmount}`);
-  }
+  // Build the query with more comprehensive fields
+  let query = `
+    SELECT Id, Name, Amount, StageName, CloseDate, Description,
+           Account.Name, Account.Industry, Account.Website,
+           Owner.Name, Owner.Email,
+           ExpectedRevenue, Probability, Type
+    FROM Opportunity
+  `;
 
-  if (args.maxAmount) {
-    conditions.push(`Amount <= ${args.maxAmount}`);
-  }
-
-  if (args.closeDateStart) {
-    conditions.push(`CloseDate >= ${args.closeDateStart}`);
-  }
-
-  if (args.closeDateEnd) {
-    conditions.push(`CloseDate <= ${args.closeDateEnd}`);
-  }
-
-  // Add WHERE clause if there are conditions
+  // Add WHERE clause if conditions exist
   if (conditions.length > 0) {
     query += ' WHERE ' + conditions.join(' AND ');
   }
 
-  query += ' ORDER BY CloseDate DESC';
+  // Add ORDER BY with multiple sort criteria
+  query += ' ORDER BY CloseDate DESC, Amount DESC NULLS LAST';
 
+  console.error('Executing SOQL Query:', query);
+
+  // Execute with pagination
   const records = await client.executeQuery(query, {
-    pageSize: args.pageSize,
-    pageNumber: args.pageNumber
+    pageSize: args.pageSize || 25,
+    pageNumber: args.pageNumber || 1
   });
+
+  interface OpportunityRecord {
+    Id: string;
+    Name: string;
+    StageName: string;
+    Amount?: number;
+    ExpectedRevenue?: number;
+    Probability?: number;
+    CloseDate?: string;
+    Type?: string;
+    Description?: string;
+    Account?: {
+      Name?: string;
+      Industry?: string;
+      Website?: string;
+    };
+    Owner?: {
+      Name?: string;
+      Email?: string;
+    };
+  }
+
+  // Format the results for better readability
+  const formattedResults = (records.results as OpportunityRecord[]).map(opp => ({
+    id: opp.Id,
+    name: opp.Name,
+    stage: opp.StageName,
+    amount: opp.Amount,
+    expected_revenue: opp.ExpectedRevenue,
+    probability: opp.Probability,
+    close_date: opp.CloseDate,
+    type: opp.Type,
+    description: opp.Description,
+    account: opp.Account ? {
+      name: opp.Account.Name,
+      industry: opp.Account.Industry,
+      website: opp.Account.Website
+    } : null,
+    owner: opp.Owner ? {
+      name: opp.Owner.Name,
+      email: opp.Owner.Email
+    } : null
+  }));
 
   return {
     content: [
       {
         type: 'text',
-        text: JSON.stringify(records, null, 2),
+        text: JSON.stringify({
+          total_count: records.totalCount,
+          page_number: records.pageNumber,
+          page_size: records.pageSize,
+          total_pages: records.totalPages,
+          results: formattedResults
+        }, null, 2),
       },
     ],
   };

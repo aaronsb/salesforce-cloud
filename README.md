@@ -100,26 +100,62 @@ Get information about the current user. No parameters required.
 ```
 
 ### search_opportunities
-Search for Salesforce opportunities with flexible filtering.
+Search for Salesforce opportunities with precise name and account matching.
 ```typescript
 {
-  searchTerm?: string;     // Optional: Search term matching opportunity or account name
-  stage?: string;          // Optional: Exact match for opportunity stage
-  minAmount?: number;      // Optional: Minimum opportunity amount
-  maxAmount?: number;      // Optional: Maximum opportunity amount
-  closeDateStart?: string; // Optional: Start date for close date range (YYYY-MM-DD)
-  closeDateEnd?: string;   // Optional: End date for close date range (YYYY-MM-DD)
-  pageSize?: number;       // Optional: Number of records per page (default: 25)
-  pageNumber?: number;     // Optional: Page number to retrieve (default: 1)
+  namePattern?: string;         // Optional: Pattern to match in Opportunity Name (e.g., "Github" matches "Github Migration" or "My Github Project")
+  accountNamePattern?: string;  // Optional: Pattern to match in Account Name (e.g., "Ford" matches "Ford" or "Ford Motor Company")
+  descriptionPattern?: string;  // Optional: Pattern to match in opportunity description
+  stage?: string;              // Optional: Exact match for opportunity stage (e.g., "Proposal", "Qualification", "Closed Won")
+  minAmount?: number;          // Optional: Minimum opportunity amount
+  maxAmount?: number;          // Optional: Maximum opportunity amount
+  closeDateStart?: string;     // Optional: Start date for close date range (YYYY-MM-DD)
+  closeDateEnd?: string;       // Optional: End date for close date range (YYYY-MM-DD)
+  pageSize?: number;           // Optional: Number of records per page (default: 25)
+  pageNumber?: number;         // Optional: Page number to retrieve (default: 1)
 }
 ```
 Example:
 ```javascript
 {
-  "searchTerm": "Ford",
-  "stage": "Proposal",
-  "minAmount": 50000,
-  "closeDateStart": "2024-01-01"
+  "namePattern": "Github",
+  "accountNamePattern": "Ford",
+  "stage": "Proposal"
+}
+```
+
+The search uses word boundaries for name matching to ensure accurate results:
+- `namePattern`: Matches full words in the opportunity name
+- `accountNamePattern`: Matches full words in the account name
+- `stage`: Performs exact matching (case-sensitive)
+
+Response includes comprehensive opportunity details:
+```typescript
+{
+  total_count: number;     // Total number of matching opportunities
+  page_number: number;     // Current page number
+  page_size: number;       // Number of records per page
+  total_pages: number;     // Total number of pages
+  results: Array<{
+    id: string;           // Opportunity ID
+    name: string;         // Opportunity name
+    stage: string;        // Current stage
+    amount?: number;      // Opportunity amount
+    expected_revenue?: number;  // Expected revenue
+    probability?: number; // Win probability
+    close_date?: string; // Expected close date
+    type?: string;       // Opportunity type
+    description?: string; // Opportunity description
+    account?: {          // Account information
+      name?: string;     // Account name
+      industry?: string; // Account industry
+      website?: string;  // Account website
+    };
+    owner?: {           // Owner information
+      name?: string;    // Owner name
+      email?: string;   // Owner email
+    };
+  }>;
 }
 ```
 
