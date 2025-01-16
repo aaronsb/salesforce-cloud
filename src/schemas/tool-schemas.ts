@@ -1,7 +1,7 @@
 export const toolSchemas = {
   get_opportunity_details: {
     name: 'get_opportunity_details',
-    description: 'Get detailed information about a Salesforce opportunity including all available fields, related records, and metadata',
+    description: 'Get detailed information about a Salesforce opportunity including all available fields (both standard and custom), related records, and metadata',
     inputSchema: {
       type: 'object',
       properties: {
@@ -15,7 +15,7 @@ export const toolSchemas = {
   },
   search_opportunities: {
     name: 'search_opportunities',
-    description: 'Search for Salesforce opportunities by name, account, and stage. Returns matching opportunities ordered by close date.',
+    description: 'Search for Salesforce opportunities by name, account, and stage. Returns matching opportunities ordered by close date. Results include both standard and custom fields.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -44,13 +44,13 @@ export const toolSchemas = {
   },
   execute_soql: {
     name: 'execute_soql',
-    description: 'Execute a SOQL query',
+    description: 'Execute a SOQL query. Supports querying both standard and custom fields (custom fields end with __c in their API names). Use describe_object first to discover available fields.',
     inputSchema: {
       type: 'object',
       properties: {
         query: {
           type: 'string',
-          description: 'SOQL query to execute',
+          description: 'SOQL query to execute. For custom fields, use the API name (e.g., Project_Status__c)',
         },
         pageSize: {
           type: 'number',
@@ -66,7 +66,7 @@ export const toolSchemas = {
   },
   describe_object: {
     name: 'describe_object',
-    description: 'Get metadata about a Salesforce object',
+    description: 'Get metadata about a Salesforce object, including both standard and custom fields when includeFields is true. Use this to discover available fields and their API names, especially useful for finding custom fields (ending in __c)',
     inputSchema: {
       type: 'object',
       properties: {
@@ -76,7 +76,7 @@ export const toolSchemas = {
         },
         includeFields: {
           type: 'boolean',
-          description: 'Whether to include field metadata (default: false)',
+          description: 'Whether to include field metadata (default: false). When true, returns all available fields including custom fields, their types, and relationships.',
         }
       },
       required: ['objectName'],
@@ -84,7 +84,7 @@ export const toolSchemas = {
   },
   create_record: {
     name: 'create_record',
-    description: 'Create a new record in Salesforce',
+    description: 'Create a new record in Salesforce. Supports both standard and custom fields in the data object.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -94,7 +94,7 @@ export const toolSchemas = {
         },
         data: {
           type: 'object',
-          description: 'Record data as key-value pairs',
+          description: 'Record data as key-value pairs. For custom fields, use the API name with __c suffix (e.g., { "Name": "Test", "Custom_Field__c": "Value" })',
         },
       },
       required: ['objectName', 'data'],
@@ -102,7 +102,7 @@ export const toolSchemas = {
   },
   update_record: {
     name: 'update_record',
-    description: 'Update an existing record in Salesforce',
+    description: 'Update an existing record in Salesforce. Supports updating both standard and custom fields.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -116,7 +116,7 @@ export const toolSchemas = {
         },
         data: {
           type: 'object',
-          description: 'Record data as key-value pairs',
+          description: 'Record data to update as key-value pairs. For custom fields, use the API name with __c suffix (e.g., { "Custom_Field__c": "New Value" })',
         },
       },
       required: ['objectName', 'recordId', 'data'],
@@ -150,7 +150,7 @@ export const toolSchemas = {
   },
   list_objects: {
     name: 'list_objects',
-    description: 'List all available Salesforce objects',
+    description: 'List all available Salesforce objects, including both standard and custom objects',
     inputSchema: {
       type: 'object',
       properties: {

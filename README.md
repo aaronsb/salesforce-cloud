@@ -60,6 +60,48 @@ To obtain these credentials:
 6. Save and wait for activation
 7. Copy the generated Consumer Key (Client ID) and Consumer Secret (Client Secret)
 
+## 🎯 Working with Custom Fields
+
+When constructing queries or working with Salesforce data, it's important to understand that many fields referenced may be custom fields specific to your Salesforce instance. Here's what you need to know:
+
+### Understanding Custom Fields
+- Custom fields in Salesforce end with `__c` in their API names
+- What appears as "Implementation Status" in the UI might be stored as "Implementation_Status__c"
+- Custom fields can represent organization-specific business concepts
+
+### Best Practices
+1. Object Metadata Analysis:
+   - Use the `describe_object` tool with `includeFields: true` to examine both standard and custom fields
+   - Look for fields that match your intent in both standard and custom field lists
+   - Map user-friendly field names to their actual API names
+
+2. Field Type Consideration:
+   - Custom fields can be various types (text, picklist, lookup, etc.)
+   - Understanding field types helps construct appropriate queries
+   - Custom fields might reference other custom objects through lookup relationships
+
+3. Query Construction:
+   - Build queries that can handle both standard and custom fields
+   - Use field metadata to validate field existence before querying
+   - Consider relationships between objects, especially with custom lookup fields
+
+### Example
+If searching for "Project Status":
+1. First, examine the object's fields to find the actual field name:
+```javascript
+{
+  "objectName": "Opportunity",
+  "includeFields": true
+}
+```
+2. Look for fields like "Project_Status__c" or similar custom fields that match your intent
+3. Use the discovered field name in your queries:
+```javascript
+{
+  "query": "SELECT Id, Name, Project_Status__c FROM Opportunity"
+}
+```
+
 ## 🛠️ Tools
 
 ### execute_soql
