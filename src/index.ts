@@ -12,6 +12,7 @@ import {
 } from '@modelcontextprotocol/sdk/types.js';
 import { SalesforceClient } from './client/salesforce-client.js';
 import { handleExecuteSOQL } from './handlers/query-handlers.js';
+import { handleSearchOpportunities, handleGetOpportunityDetails } from './handlers/opportunity-handlers.js';
 import { handleDescribeObject, handleListObjects } from './handlers/object-handlers.js';
 import { handleCreateRecord, handleUpdateRecord, handleDeleteRecord } from './handlers/record-handlers.js';
 import { handleGetUserInfo } from './handlers/user-handlers.js';
@@ -135,6 +136,12 @@ class SalesforceServer {
 
           case 'list_objects':
             return await handleListObjects(this.sfClient, request.params.arguments);
+
+          case 'search_opportunities':
+            return await handleSearchOpportunities(this.sfClient, request.params.arguments);
+
+          case 'get_opportunity_details':
+            return await handleGetOpportunityDetails(this.sfClient, request.params.arguments);
 
           default:
             throw new McpError(ErrorCode.MethodNotFound, `Unknown tool: ${name}`);

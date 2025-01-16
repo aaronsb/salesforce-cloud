@@ -99,6 +99,52 @@ Get information about the current user. No parameters required.
 {}
 ```
 
+### search_opportunities
+Search for Salesforce opportunities with flexible filtering.
+```typescript
+{
+  searchTerm?: string;     // Optional: Search term matching opportunity or account name
+  stage?: string;          // Optional: Exact match for opportunity stage
+  minAmount?: number;      // Optional: Minimum opportunity amount
+  maxAmount?: number;      // Optional: Maximum opportunity amount
+  closeDateStart?: string; // Optional: Start date for close date range (YYYY-MM-DD)
+  closeDateEnd?: string;   // Optional: End date for close date range (YYYY-MM-DD)
+  pageSize?: number;       // Optional: Number of records per page (default: 25)
+  pageNumber?: number;     // Optional: Page number to retrieve (default: 1)
+}
+```
+Example:
+```javascript
+{
+  "searchTerm": "Ford",
+  "stage": "Proposal",
+  "minAmount": 50000,
+  "closeDateStart": "2024-01-01"
+}
+```
+
+### get_opportunity_details
+Get comprehensive details about a specific opportunity including related records and history.
+```typescript
+{
+  opportunityId: string;   // Required: The ID of the Salesforce opportunity
+}
+```
+Example:
+```javascript
+{
+  "opportunityId": "006XXXXXXXXXX"
+}
+```
+Response includes:
+- Basic opportunity information (amount, stage, dates, etc.)
+- Account details (name, industry, website)
+- Owner information (name, email)
+- Contact roles
+- Field history (chronological changes)
+- Related tasks
+- Related notes
+
 ### list_objects
 List all available Salesforce objects with pagination support.
 ```typescript
