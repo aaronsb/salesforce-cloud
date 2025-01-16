@@ -1,12 +1,12 @@
-# Salesforce MCP Server
+# 🌩️ Salesforce MCP Server
 
 This MCP (Model Context Protocol) server provides tools for interacting with Salesforce, with built-in pagination and simplified data structures to manage response sizes.
 
-## What is MCP?
+## 🤔 What is MCP?
 
 The Model Context Protocol (MCP) is a standardized way for AI models to interact with external tools and resources. MCP servers provide specific capabilities that can be used by AI models through a consistent interface. This Salesforce MCP server allows AI models to interact with Salesforce data and operations in a structured way.
 
-## Installation
+## 🚀 Installation
 
 1. Clone this repository
 2. Install dependencies:
@@ -18,7 +18,7 @@ npm install
 npm run build
 ```
 
-## Configuration
+## ⚙️ Configuration
 
 The server requires configuration in your Claude desktop app's configuration file. On Linux, this is located at `~/.config/Claude/claude_desktop_config.json`. On macOS, it's at `~/Library/Application Support/Claude/claude_desktop_config.json`.
 
@@ -60,7 +60,7 @@ To obtain these credentials:
 6. Save and wait for activation
 7. Copy the generated Consumer Key (Client ID) and Consumer Secret (Client Secret)
 
-## Tools
+## 🛠️ Tools
 
 ### execute_soql
 Execute a SOQL query with pagination support.
@@ -212,7 +212,7 @@ Example:
 }
 ```
 
-## Response Formats
+## 📦 Response Formats
 
 ### Paginated Response
 Operations that return multiple records use this format:
@@ -242,7 +242,7 @@ All tools return errors in a consistent format:
 }
 ```
 
-## Development
+## 💻 Development
 
 To run the server locally for development:
 
@@ -256,10 +256,24 @@ npm run build
 node build/index.js
 ```
 
-## Contributing
+## 🌟 Future Possibilities
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+The Salesforce API is incredibly rich and offers numerous possibilities for expansion. Here are some areas where this MCP server could grow:
 
-## License
+- Support for more Salesforce objects (Leads, Cases, Contacts, etc.)
+- Integration with Salesforce Flow and Process Builder
+- Custom object support
+- Bulk API operations for large datasets
+- Chatter API integration
+- Analytics API support
+- Custom report and dashboard access
+
+We'd love to hear your ideas about what would be most valuable to add next!
+
+## 🤝 Contributing
+
+We welcome contributions from the community! Whether it's adding new features, improving documentation, or reporting bugs, your input helps make this project better for everyone. Feel free to submit a Pull Request or open an Issue to start a discussion.
+
+## 📄 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
