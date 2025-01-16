@@ -1,6 +1,64 @@
 # Salesforce MCP Server
 
-This MCP server provides tools for interacting with Salesforce, with built-in pagination and simplified data structures to manage response sizes.
+This MCP (Model Context Protocol) server provides tools for interacting with Salesforce, with built-in pagination and simplified data structures to manage response sizes.
+
+## What is MCP?
+
+The Model Context Protocol (MCP) is a standardized way for AI models to interact with external tools and resources. MCP servers provide specific capabilities that can be used by AI models through a consistent interface. This Salesforce MCP server allows AI models to interact with Salesforce data and operations in a structured way.
+
+## Installation
+
+1. Clone this repository
+2. Install dependencies:
+```bash
+npm install
+```
+3. Build the server:
+```bash
+npm run build
+```
+
+## Configuration
+
+The server requires configuration in your Claude desktop app's configuration file. On Linux, this is located at `~/.config/Claude/claude_desktop_config.json`. On macOS, it's at `~/Library/Application Support/Claude/claude_desktop_config.json`.
+
+Add the following configuration to the `mcpServers` object in your config file:
+
+```json
+{
+  "mcpServers": {
+    "salesforce-cloud": {
+      "command": "node",
+      "args": ["/path/to/salesforce-cloud/build/index.js"],
+      "env": {
+        "SF_CLIENT_ID": "your_client_id",
+        "SF_CLIENT_SECRET": "your_client_secret",
+        "SF_USERNAME": "your_salesforce_username",
+        "SF_PASSWORD": "your_salesforce_password",
+        "SF_LOGIN_URL": "https://login.salesforce.com"
+      }
+    }
+  }
+}
+```
+
+### Required Environment Variables
+
+- `SF_CLIENT_ID`: Your Salesforce OAuth client ID
+- `SF_CLIENT_SECRET`: Your Salesforce OAuth client secret
+- `SF_USERNAME`: Your Salesforce username
+- `SF_PASSWORD`: Your Salesforce password
+- `SF_LOGIN_URL`: Salesforce login URL (optional, defaults to https://login.salesforce.com)
+
+To obtain these credentials:
+
+1. Go to Setup in your Salesforce org
+2. Navigate to App Manager
+3. Create a new Connected App
+4. Enable OAuth settings
+5. Add necessary OAuth scopes
+6. Save and wait for activation
+7. Copy the generated Consumer Key (Client ID) and Consumer Secret (Client Secret)
 
 ## Tools
 
@@ -103,10 +161,10 @@ Get information about the current user. No parameters required.
 Search for Salesforce opportunities with precise name and account matching.
 ```typescript
 {
-  namePattern?: string;         // Optional: Pattern to match in Opportunity Name (e.g., "Github" matches "Github Migration" or "My Github Project")
-  accountNamePattern?: string;  // Optional: Pattern to match in Account Name (e.g., "Ford" matches "Ford" or "Ford Motor Company")
+  namePattern?: string;         // Optional: Pattern to match in Opportunity Name
+  accountNamePattern?: string;  // Optional: Pattern to match in Account Name
   descriptionPattern?: string;  // Optional: Pattern to match in opportunity description
-  stage?: string;              // Optional: Exact match for opportunity stage (e.g., "Proposal", "Qualification", "Closed Won")
+  stage?: string;              // Optional: Exact match for opportunity stage
   minAmount?: number;          // Optional: Minimum opportunity amount
   maxAmount?: number;          // Optional: Maximum opportunity amount
   closeDateStart?: string;     // Optional: Start date for close date range (YYYY-MM-DD)
@@ -118,44 +176,9 @@ Search for Salesforce opportunities with precise name and account matching.
 Example:
 ```javascript
 {
-  "namePattern": "Github",
-  "accountNamePattern": "Ford",
+  "namePattern": "Cloud Migration",
+  "accountNamePattern": "Tech Corp",
   "stage": "Proposal"
-}
-```
-
-The search uses word boundaries for name matching to ensure accurate results:
-- `namePattern`: Matches full words in the opportunity name
-- `accountNamePattern`: Matches full words in the account name
-- `stage`: Performs exact matching (case-sensitive)
-
-Response includes comprehensive opportunity details:
-```typescript
-{
-  total_count: number;     // Total number of matching opportunities
-  page_number: number;     // Current page number
-  page_size: number;       // Number of records per page
-  total_pages: number;     // Total number of pages
-  results: Array<{
-    id: string;           // Opportunity ID
-    name: string;         // Opportunity name
-    stage: string;        // Current stage
-    amount?: number;      // Opportunity amount
-    expected_revenue?: number;  // Expected revenue
-    probability?: number; // Win probability
-    close_date?: string; // Expected close date
-    type?: string;       // Opportunity type
-    description?: string; // Opportunity description
-    account?: {          // Account information
-      name?: string;     // Account name
-      industry?: string; // Account industry
-      website?: string;  // Account website
-    };
-    owner?: {           // Owner information
-      name?: string;    // Owner name
-      email?: string;   // Owner email
-    };
-  }>;
 }
 ```
 
@@ -172,14 +195,6 @@ Example:
   "opportunityId": "006XXXXXXXXXX"
 }
 ```
-Response includes:
-- Basic opportunity information (amount, stage, dates, etc.)
-- Account details (name, industry, website)
-- Owner information (name, email)
-- Contact roles
-- Field history (chronological changes)
-- Related tasks
-- Related notes
 
 ### list_objects
 List all available Salesforce objects with pagination support.
@@ -214,34 +229,7 @@ Operations that return multiple records use this format:
 }
 ```
 
-### Simplified Object
-Object metadata is simplified to essential fields:
-```typescript
-{
-  name: string;        // API name of the object
-  label: string;       // Display label
-  custom: boolean;     // Whether this is a custom object
-  createable: boolean; // Whether new records can be created
-  updateable: boolean; // Whether records can be updated
-  deletable: boolean;  // Whether records can be deleted
-  fields?: SimplifiedField[]; // Optional array of field metadata
-}
-```
-
-### Simplified Field
-Field metadata is simplified when requested:
-```typescript
-{
-  name: string;        // API name of the field
-  label: string;       // Display label
-  type: string;        // Field type (string, number, etc.)
-  required: boolean;   // Whether the field is required
-  updateable: boolean; // Whether the field can be updated
-  defaultValue?: any;  // Default value if any
-}
-```
-
-## Error Handling
+### Error Handling
 
 All tools return errors in a consistent format:
 ```typescript
@@ -254,11 +242,20 @@ All tools return errors in a consistent format:
 }
 ```
 
-## Environment Variables
+## Development
 
-The server requires the following environment variables:
-- SF_CLIENT_ID: Salesforce client ID
-- SF_CLIENT_SECRET: Salesforce client secret
-- SF_USERNAME: Salesforce username
-- SF_PASSWORD: Salesforce password
-- SF_LOGIN_URL: Salesforce login URL (optional, defaults to https://login.salesforce.com)
+To run the server locally for development:
+
+1. Set up your environment variables in a `.env` file
+2. Build the project:
+```bash
+npm run build
+```
+3. Start the server:
+```bash
+node build/index.js
+```
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
