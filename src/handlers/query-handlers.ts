@@ -1,9 +1,10 @@
 import { McpError, ErrorCode } from '@modelcontextprotocol/sdk/types.js';
-import { SalesforceClient } from '../client/salesforce-client.js';
-import { PaginationParams } from '../types/index.js';
+import { SalesforceClient } from '../client/salesforce-client';
 
-interface QueryParams extends PaginationParams {
+export interface QueryParams {
   query: string;
+  pageSize?: number;
+  pageNumber?: number;
 }
 
 function isQueryParams(obj: any): obj is QueryParams {

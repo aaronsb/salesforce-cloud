@@ -2,29 +2,32 @@ import jsforce from 'jsforce';
 import { PaginationParams, SimplifiedObject, SimplifiedUserInfo } from '../types/index.js';
 import { paginateResults, simplifyObjectMetadata, simplifyUserInfo, addPaginationToQuery } from '../utils/index.js';
 
-// Get Salesforce credentials from environment variables
-const SF_CLIENT_ID = process.env.SF_CLIENT_ID;
-const SF_CLIENT_SECRET = process.env.SF_CLIENT_SECRET;
-const SF_USERNAME = process.env.SF_USERNAME;
-const SF_PASSWORD = process.env.SF_PASSWORD;
-const SF_LOGIN_URL = process.env.SF_LOGIN_URL || 'https://login.salesforce.com';
-
-if (!SF_CLIENT_ID || !SF_CLIENT_SECRET || !SF_USERNAME || !SF_PASSWORD) {
-  throw new Error('Missing required Salesforce environment variables');
-}
-
 export class SalesforceClient {
-  private conn: jsforce.Connection;
+  private SF_CLIENT_ID: string;
+  private SF_CLIENT_SECRET: string;
+  private SF_USERNAME: string;
+  private SF_PASSWORD: string;
+  private SF_LOGIN_URL: string;
+  private conn!: jsforce.Connection;
 
   constructor() {
+    this.SF_CLIENT_ID = process.env.SF_CLIENT_ID || '';
+    this.SF_CLIENT_SECRET = process.env.SF_CLIENT_SECRET || '';
+    this.SF_USERNAME = process.env.SF_USERNAME || '';
+    this.SF_PASSWORD = process.env.SF_PASSWORD || '';
+    this.SF_LOGIN_URL = process.env.SF_LOGIN_URL || 'https://login.salesforce.com';
+
     this.conn = new jsforce.Connection({
-      loginUrl: SF_LOGIN_URL
+      loginUrl: this.SF_LOGIN_URL
     });
   }
 
   async initialize() {
+    if (!this.SF_CLIENT_ID || !this.SF_CLIENT_SECRET || !this.SF_USERNAME || !this.SF_PASSWORD) {
+      throw new Error('Missing required Salesforce environment variables');
+    }
     try {
-      await this.conn.login(SF_USERNAME!, SF_PASSWORD!);
+      await this.conn.login(this.SF_USERNAME, this.SF_PASSWORD);
     } catch (error: any) {
       throw new Error(`Salesforce login failed: ${error?.message || 'Unknown error'}`);
     }
@@ -102,7 +105,7 @@ export class SalesforceClient {
     try {
       const result = await this.conn.describeGlobal();
       return paginateResults(
-        result.sobjects.map(obj => simplifyObjectMetadata(obj)),
+        result.sobjects.map((obj: any) => simplifyObjectMetadata(obj)),
         pagination || {}
       );
     } catch (error: any) {
