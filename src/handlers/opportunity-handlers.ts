@@ -95,7 +95,71 @@ export async function handleGetOpportunityDetails(client: SalesforceClient, args
     );
   }
 
-  const opportunity = records.results[0];
+  interface OpportunityRecord {
+    Id: string;
+    Name: string;
+    Amount?: number;
+    Type?: string;
+    StageName: string;
+    Probability?: number;
+    CloseDate?: string;
+    Description?: string;
+    LeadSource?: string;
+    NextStep?: string;
+    ForecastCategory?: string;
+    ExpectedRevenue?: number;
+    TotalOpportunityQuantity?: number;
+    HasOpportunityLineItem?: boolean;
+    IsClosed?: boolean;
+    IsWon?: boolean;
+    LastActivityDate?: string;
+    Account?: {
+      Name?: string;
+      Industry?: string;
+      Website?: string;
+    };
+    Owner?: {
+      Name?: string;
+      Email?: string;
+    };
+    OpportunityContactRoles?: {
+      records: Array<{
+        Contact?: {
+          Name?: string;
+          Email?: string;
+        };
+        Role?: string;
+      }>;
+    };
+    Histories?: {
+      records: Array<{
+        CreatedDate: string;
+        Field: string;
+        OldValue: any;
+        NewValue: any;
+      }>;
+    };
+    Tasks?: {
+      records: Array<{
+        Subject: string;
+        Status: string;
+        Priority: string;
+        CreatedDate: string;
+      }>;
+    };
+    Notes?: {
+      records: Array<{
+        Title: string;
+        Body: string;
+        CreatedDate: string;
+        CreatedBy?: {
+          Name?: string;
+        };
+      }>;
+    };
+  }
+
+  const opportunity = records.results[0] as OpportunityRecord;
   
   // Format the opportunity details in a more readable way
   const formattedOpportunity = {
