@@ -20,17 +20,7 @@ jest.mock('../client/salesforce-client', () => {
 });
 
 describe('Query Handlers', () => {
-  let mockContext: any;
-
   beforeEach(() => {
-    // Setup mock MCP context
-    mockContext = {
-      log: {
-        info: jest.fn(),
-        error: jest.fn()
-      }
-    };
-
     // Setup test environment variables
     process.env = {
       ...process.env,
