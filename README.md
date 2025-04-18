@@ -8,6 +8,8 @@ The Model Context Protocol (MCP) is a standardized way for AI models to interact
 
 ## 🚀 Installation
 
+### Local Installation
+
 1. Clone this repository
 2. Install dependencies:
 ```bash
@@ -17,6 +19,86 @@ npm install
 ```bash
 npm run build
 ```
+
+### Docker Installation
+
+The server is available as a Docker container from GitHub Container Registry:
+
+```bash
+# Pull the latest image
+docker pull ghcr.io/aaronsb/salesforce-cloud:latest
+
+# Run the container with environment variables
+docker run -d \
+  -e SF_CLIENT_ID=your_client_id \
+  -e SF_CLIENT_SECRET=your_client_secret \
+  -e SF_USERNAME=your_username \
+  -e SF_PASSWORD=your_password \
+  -e SF_LOGIN_URL=https://login.salesforce.com \
+  ghcr.io/aaronsb/salesforce-cloud:latest
+```
+
+You can also build the container locally:
+
+```bash
+# Build the image
+docker build -t salesforce-cloud .
+
+# Run the container
+docker run -d \
+  -e SF_CLIENT_ID=your_client_id \
+  -e SF_CLIENT_SECRET=your_client_secret \
+  -e SF_USERNAME=your_username \
+  -e SF_PASSWORD=your_password \
+  -e SF_LOGIN_URL=https://login.salesforce.com \
+  salesforce-cloud
+```
+
+### AI Agent Self-Installation
+
+For AI agents looking to self-install this server:
+
+1. Verify system requirements:
+   - Node.js 18 or higher
+   - Docker (if using containerized deployment)
+   - Access to a Salesforce organization
+
+2. Clone and prepare:
+```bash
+git clone https://github.com/aaronsb/salesforce-cloud.git
+cd salesforce-cloud
+```
+
+3. Choose deployment method:
+
+   a. For local deployment:
+   ```bash
+   npm install
+   npm run build
+   node build/index.js
+   ```
+
+   b. For Docker deployment:
+   ```bash
+   docker pull ghcr.io/aaronsb/salesforce-cloud:latest
+   # Configure environment variables as shown in Docker section
+   ```
+
+4. Validate installation:
+   - Test connection to Salesforce
+   - Verify tool availability
+   - Check response formats
+
+5. Integration steps:
+   - Update MCP configuration
+   - Register server endpoints
+   - Configure authentication
+   - Test tool accessibility
+
+6. Error handling:
+   - Monitor logs for connection issues
+   - Verify environment variables
+   - Check Salesforce API access
 
 ## ⚙️ Configuration
 
