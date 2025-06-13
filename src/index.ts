@@ -1,6 +1,10 @@
 #!/usr/bin/env node
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+import * as dotenv from 'dotenv';
+
+// Load environment variables from .env file
+dotenv.config();
 import {
   CallToolRequestSchema,
   ErrorCode,
