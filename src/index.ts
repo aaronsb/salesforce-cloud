@@ -20,6 +20,11 @@ import { handleSearchOpportunities, handleGetOpportunityDetails } from './handle
 import { handleDescribeObject, handleListObjects } from './handlers/object-handlers.js';
 import { handleCreateRecord, handleUpdateRecord, handleDeleteRecord } from './handlers/record-handlers.js';
 import { handleGetUserInfo } from './handlers/user-handlers.js';
+import { handleAnalyzeConversation } from './handlers/conversation-handlers.js';
+import { handleGenerateBusinessCase } from './handlers/business-case-handlers.js';
+import { handleEnrichOpportunity } from './handlers/enrichment-handlers.js';
+import { handleFindSimilarOpportunities } from './handlers/pattern-handlers.js';
+import { handleOpportunityInsights } from './handlers/insights-handlers.js';
 import { toolSchemas } from './schemas/tool-schemas.js';
 
 class SalesforceServer {
@@ -146,6 +151,21 @@ class SalesforceServer {
 
           case 'get_opportunity_details':
             return await handleGetOpportunityDetails(this.sfClient, request.params.arguments);
+
+          case 'analyze_conversation':
+            return await handleAnalyzeConversation(request.params.arguments, this.sfClient);
+
+          case 'generate_business_case':
+            return await handleGenerateBusinessCase(request.params.arguments, this.sfClient);
+
+          case 'enrich_opportunity':
+            return await handleEnrichOpportunity(request.params.arguments, this.sfClient);
+
+          case 'find_similar_opportunities':
+            return await handleFindSimilarOpportunities(request.params.arguments, this.sfClient);
+
+          case 'opportunity_insights':
+            return await handleOpportunityInsights(request.params.arguments, this.sfClient);
 
           default:
             throw new McpError(ErrorCode.MethodNotFound, `Unknown tool: ${name}`);
