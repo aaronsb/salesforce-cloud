@@ -1,5 +1,5 @@
 import jsforce from 'jsforce';
-import { PaginationParams, SimplifiedObject, SimplifiedUserInfo } from '../types/index.js';
+import { PaginationParams, SimplifiedObject, SimplifiedUserInfo, PaginatedSimplifiedObject } from '../types/index.js';
 import { paginateResults, simplifyObjectMetadata, simplifyUserInfo, addPaginationToQuery } from '../utils/index.js';
 
 export class SalesforceClient {
@@ -43,12 +43,53 @@ export class SalesforceClient {
     }
   }
 
-  async describeObject(objectName: string, includeFields: boolean = false): Promise<SimplifiedObject> {
+  async describeObject(
+    objectName: string, 
+    includeFields: boolean = false, 
+    pagination?: PaginationParams
+  ): Promise<SimplifiedObject | PaginatedSimplifiedObject> {
     try {
       const metadata = await this.conn.describe(objectName);
+      
+      if (!includeFields) {
+        return simplifyObjectMetadata({
+          ...metadata,
+          fields: undefined
+        });
+      }
+
+      // If pagination is provided and fields are requested, paginate the fields
+      if (pagination && (pagination.pageSize || pagination.pageNumber)) {
+        const pageSize = pagination.pageSize || 50;
+        const pageNumber = pagination.pageNumber || 1;
+        const totalFields = metadata.fields?.length || 0;
+        const totalPages = Math.ceil(totalFields / pageSize);
+        const startIndex = (pageNumber - 1) * pageSize;
+        const endIndex = startIndex + pageSize;
+        
+        const paginatedFields = metadata.fields?.slice(startIndex, endIndex) || [];
+        
+        const simplified = simplifyObjectMetadata({
+          ...metadata,
+          fields: paginatedFields
+        });
+
+        return {
+          ...simplified,
+          totalFields,
+          pageInfo: {
+            currentPage: pageNumber,
+            totalPages,
+            hasNextPage: pageNumber < totalPages,
+            hasPreviousPage: pageNumber > 1
+          }
+        };
+      }
+
+      // Return all fields if no pagination
       return simplifyObjectMetadata({
         ...metadata,
-        fields: includeFields ? metadata.fields : undefined
+        fields: metadata.fields
       });
     } catch (error: any) {
       throw new Error(`Object describe failed: ${error?.message || 'Unknown error'}`);
