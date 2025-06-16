@@ -20,6 +20,23 @@ export interface SimplifiedObject {
   }>;
 }
 
+export interface PaginatedSimplifiedObject extends Omit<SimplifiedObject, 'fields'> {
+  fields?: Array<{
+    name: string;
+    label: string;
+    type: string;
+    custom: boolean;
+    required: boolean;
+  }>;
+  totalFields?: number;
+  pageInfo?: {
+    currentPage: number;
+    totalPages: number;
+    hasNextPage: boolean;
+    hasPreviousPage: boolean;
+  };
+}
+
 export interface SimplifiedUserInfo {
   id: string;
   username: string;

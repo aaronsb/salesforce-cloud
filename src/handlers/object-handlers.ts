@@ -5,6 +5,8 @@ import { PaginationParams } from '../types/index.js';
 interface DescribeObjectParams {
   objectName: string;
   includeFields?: boolean;
+  pageSize?: number;
+  pageNumber?: number;
 }
 
 function isDescribeObjectParams(obj: any): obj is DescribeObjectParams {
@@ -19,9 +21,15 @@ export async function handleDescribeObject(client: SalesforceClient, args: any) 
     );
   }
 
+  const pagination: PaginationParams = {
+    pageSize: args.pageSize,
+    pageNumber: args.pageNumber
+  };
+
   const metadata = await client.describeObject(
     args.objectName,
-    args.includeFields
+    args.includeFields,
+    pagination
   );
 
   return {

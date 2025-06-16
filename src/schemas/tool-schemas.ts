@@ -235,6 +235,14 @@ export const toolSchemas = {
         includeFields: {
           type: 'boolean',
           description: 'Whether to include field metadata (default: false). When true, returns all available fields including custom fields, their types, and relationships.',
+        },
+        pageSize: {
+          type: 'number',
+          description: 'Number of fields per page when includeFields is true (default: 50)',
+        },
+        pageNumber: {
+          type: 'number',
+          description: 'Page number to retrieve when includeFields is true (default: 1)',
         }
       },
       required: ['objectName'],
