@@ -45,45 +45,24 @@ Imagine having a sales expert that instantly knows everything about your deals a
 
 ### 💬 Live Chat Example
 
-> **👤 You:** Can you look for any open salesforce opportunities where the solution engineer includes Aaron Rochelle?
+| | |
+|---|---|
+| **👤 You** | Can you look for any open salesforce opportunities where the solution engineer includes Aaron Rochelle? |
+| **🤖 AI Assistant** | Let me help you search for Salesforce opportunities where Aaron Rochelle is involved as a Solution Engineer. I'll run a query in your Salesforce database to find opportunities matching that criteria...<br><br>**📊 Found 3 opportunities:**<br>• Cloud Migration - Acme Corp ($250K, Proposal)<br>• Digital Transformation - TechFlow ($180K, Qualification)<br>• Infrastructure Upgrade - GlobalTech ($320K, Negotiation) |
 
-> **🤖 AI Assistant:** Let me help you search for Salesforce opportunities where Aaron Rochelle is involved as a Solution Engineer. I'll run a query in your Salesforce database to find opportunities matching that criteria...
-> 
-> **📊 Found 3 opportunities:**
-> • Cloud Migration - Acme Corp ($250K, Proposal)  
-> • Digital Transformation - TechFlow ($180K, Qualification)  
-> • Infrastructure Upgrade - GlobalTech ($320K, Negotiation)
+---
 
-> **👤 You:** Tell me more about the Acme Corp opportunity
+| | |
+|---|---|
+| **👤 You** | Tell me more about the Acme Corp opportunity |
+| **🤖 AI Assistant** | Here are the key details for the Acme Corp Cloud Migration opportunity:<br><br>**💼 Opportunity Details:**<br>• **Account:** Acme Corp<br>• **Amount:** $250,000<br>• **Stage:** Proposal<br>• **Close Date:** 2024-03-15<br>• **Decision Maker:** Sarah Johnson (IT Director)<br><br>**🔍 Intelligence Insights:**<br>• Similar cloud deals average 45 days in proposal stage<br>• 73% win rate when executive sponsor engaged early<br>• **Competitor:** AWS (primary threat)<br>• **Next action:** Schedule technical deep-dive |
 
-> **🤖 AI Assistant:** Here are the key details for the Acme Corp Cloud Migration opportunity:
-> 
-> **💼 Opportunity Details:**
-> - **Account:** Acme Corp
-> - **Amount:** $250,000
-> - **Stage:** Proposal
-> - **Close Date:** 2024-03-15
-> - **Decision Maker:** Sarah Johnson (IT Director)
-> 
-> **🔍 Intelligence Insights:**
-> - Similar cloud deals average 45 days in proposal stage
-> - 73% win rate when executive sponsor engaged early
-> - **Competitor:** AWS (primary threat)
-> - **Next action:** Schedule technical deep-dive
+---
 
-> **👤 You:** What similar deals have we won? Show me the patterns
-
-> **🤖 AI Assistant:** I found 8 similar cloud migration deals you've won in the past 12 months. Here are the key patterns:
-> 
-> **🎯 Success Patterns:**
-> - **Average deal size:** $275K (vs $250K current)
-> - **67%** had solution architect engaged by day 14
-> - **89%** included a pilot/POC phase  
-> - **Executive sponsors** attended 78% of demos
-> 
-> **📋 Recommendation:** Schedule Aaron for a technical deep-dive with their DevOps team this week. Based on similar wins, proposing a 2-week pilot will increase close probability by 34%.
-> 
-> 📄 Would you like me to generate a business case document for this opportunity?
+| | |
+|---|---|
+| **👤 You** | What similar deals have we won? Show me the patterns |
+| **🤖 AI Assistant** | I found 8 similar cloud migration deals you've won in the past 12 months. Here are the key patterns:<br><br>**🎯 Success Patterns:**<br>• **Average deal size:** $275K (vs $250K current)<br>• **67%** had solution architect engaged by day 14<br>• **89%** included a pilot/POC phase<br>• **Executive sponsors** attended 78% of demos<br><br>**📋 Recommendation:** Schedule Aaron for a technical deep-dive with their DevOps team this week. Based on similar wins, proposing a 2-week pilot will increase close probability by 34%.<br><br>📄 Would you like me to generate a business case document for this opportunity? |
 
 ## 🤔 What is MCP?
 
