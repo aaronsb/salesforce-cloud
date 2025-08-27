@@ -1,0 +1,89 @@
+# Dependabot configuration for automated dependency updates
+# https://docs.github.com/en/code-security/dependabot
+
+version: 2
+updates:
+  # Enable version updates for npm dependencies
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "America/Los_Angeles"
+    # Automatically open PRs for security updates
+    open-pull-requests-limit: 10
+    # Group updates for minor and patch versions to reduce PR noise
+    groups:
+      production-dependencies:
+        patterns:
+          - "@modelcontextprotocol/sdk"
+          - "jsforce"
+          - "dotenv"
+        update-types:
+          - "minor"
+          - "patch"
+      development-dependencies:
+        patterns:
+          - "@types/*"
+          - "@typescript-eslint/*"
+          - "eslint*"
+          - "jest*"
+          - "ts-jest"
+          - "typescript"
+        update-types:
+          - "minor"
+          - "patch"
+    # Allow both direct and indirect (transitive) dependency updates
+    allow:
+      - dependency-type: "all"
+    # Automatically rebase when target branch changes
+    rebase-strategy: "auto"
+    # Labels to apply to PRs
+    labels:
+      - "dependencies"
+      - "automated"
+    # Commit message prefix for consistency
+    commit-message:
+      prefix: "chore"
+      prefix-development: "chore"
+      include: "scope"
+    # Ignore specific versions if needed
+    ignore:
+      # ESLint 9.x requires significant config changes
+      - dependency-name: "eslint"
+        versions: ["9.x"]
+      # TypeScript ESLint 8.x may have breaking changes
+      - dependency-name: "@typescript-eslint/*"
+        versions: ["8.x"]
+      # Major version updates require manual review
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+
+  # Enable security updates for GitHub Actions
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "America/Los_Angeles"
+    labels:
+      - "dependencies"
+      - "github-actions"
+    commit-message:
+      prefix: "ci"
+
+  # Docker base image updates (if Dockerfile exists)
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "America/Los_Angeles"
+    labels:
+      - "dependencies"
+      - "docker"
+    commit-message:
+      prefix: "build"
