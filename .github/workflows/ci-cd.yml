@@ -91,7 +91,7 @@ jobs:
             DOCKER_HASH=${{ github.sha }}
       
       - name: Cleanup old packages
-        uses: actions/delete-package-versions@v4
+        uses: actions/delete-package-versions@v5
         with:
           package-name: 'salesforce-cloud'
           package-type: container
