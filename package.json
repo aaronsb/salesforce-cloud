@@ -19,9 +19,9 @@
     "test": "jest"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.12.3",
-    "dotenv": "^16.5.0",
-    "jsforce": "^3.8.2"
+    "@modelcontextprotocol/sdk": "^1.17.4",
+    "dotenv": "^16.6.1",
+    "jsforce": "^3.10.4"
   },
   "devDependencies": {
     "@types/jest": "^29.5.12",
