@@ -1,5 +1,5 @@
 # Build stage
-FROM node:20-slim AS builder
+FROM node:24-slim AS builder
 WORKDIR /app
 
 # Add metadata
@@ -16,7 +16,7 @@ RUN npm ci && \
     npm run build
 
 # Production stage
-FROM node:20-slim
+FROM node:24-slim
 WORKDIR /app
 
 # Set docker hash as environment variable
