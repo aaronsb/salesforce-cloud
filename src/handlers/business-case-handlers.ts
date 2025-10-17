@@ -17,7 +17,7 @@ function isGenerateBusinessCaseArgs(obj: any): obj is GenerateBusinessCaseArgs {
 
 export async function handleGenerateBusinessCase(
   args: any,
-  sfClient: SalesforceClient
+  _sfClient: SalesforceClient
 ) {
   if (!isGenerateBusinessCaseArgs(args)) {
     throw new McpError(

@@ -1,7 +1,7 @@
 // @ts-check
 
 /** @type {import('ts-jest').JestConfigWithTsJest} */
-const config = {
+module.exports = {
   preset: 'ts-jest',
   testEnvironment: 'node',
   moduleNameMapper: {
@@ -12,8 +12,7 @@ const config = {
     '^.+\\.(ts|js)x?$': [
       'ts-jest',
       {
-        useESM: false,
-        isolatedModules: true
+        useESM: false
       },
     ],
   },
@@ -26,5 +25,3 @@ const config = {
     '<rootDir>/src/**/?(*.)+(spec|test).[jt]s?(x)'
   ]
 };
-
-module.exports = config;

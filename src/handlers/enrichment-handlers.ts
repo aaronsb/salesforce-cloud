@@ -60,7 +60,6 @@ export async function handleEnrichOpportunity(
 
     // Analyze industry patterns
     const industryMap = new Map<string, number>();
-    const stageMap = new Map<string, number>();
     const sourceMap = new Map<string, number>();
     let totalValue = 0;
     let avgProbability = 0;
@@ -87,7 +86,7 @@ export async function handleEnrichOpportunity(
     const insights = generateEnrichmentInsights(opp, similarOpps.results, industryMap, sourceMap, avgDealSize);
 
     // Build best practices recommendations
-    const bestPractices = args.includeBestPractices !== false ? generateBestPractices(opp, industryMap) : [];
+    const bestPractices = args.includeBestPractices !== false ? generateBestPractices(opp) : [];
 
     // Competitive intelligence (if requested)
     const competitiveIntel = args.includeCompetitiveIntel ? generateCompetitiveIntel(opp, similarOpps.results) : null;
@@ -216,7 +215,7 @@ function generateEnrichmentInsights(opp: any, similarDeals: any[], industryMap: 
   return insights;
 }
 
-function generateBestPractices(opp: any, industryMap: Map<string, number>) {
+function generateBestPractices(opp: any) {
   const practices = [];
 
   // Industry-specific best practices
