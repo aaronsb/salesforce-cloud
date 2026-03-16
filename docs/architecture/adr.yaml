@@ -15,7 +15,7 @@ domains:
   infra:
     range: [200, 299]
     name: Infrastructure
-    description: CI/CD, packaging, deployment, Docker
+    description: CI/CD, npm packaging, deployment
     folder: infrastructure
 
   api:
