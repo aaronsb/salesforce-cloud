@@ -69,12 +69,8 @@ class SalesforceServer {
       },
       {
         capabilities: {
-          tools: {
-            schemas: tools,
-          },
-          resources: {
-            schemas: [], // Explicitly define empty resources
-          },
+          tools: {},
+          resources: {},
         },
       }
     );

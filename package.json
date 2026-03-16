@@ -2,12 +2,29 @@
   "name": "salesforce-cloud",
   "version": "0.1.0",
   "description": "A Model Context Protocol server for Salesforce",
-  "private": true,
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/aaronsb/salesforce-cloud.git"
+  },
+  "homepage": "https://github.com/aaronsb/salesforce-cloud#readme",
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "salesforce",
+    "ai",
+    "llm",
+    "tools"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
   "bin": {
     "salesforce-cloud": "./build/index.js"
   },
   "files": [
-    "build"
+    "build",
+    "!build/__tests__"
   ],
   "scripts": {
     "build": "tsc && node -e \"require('fs').chmodSync('build/index.js', '755')\"",
