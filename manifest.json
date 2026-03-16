@@ -1,0 +1,67 @@
+{
+  "manifest_version": "0.3",
+  "name": "salesforce-cloud",
+  "display_name": "Salesforce Cloud",
+  "version": "0.1.0",
+  "description": "A Model Context Protocol server for Salesforce CRM integration",
+  "author": {
+    "name": "aaronsb",
+    "url": "https://github.com/aaronsb"
+  },
+  "license": "MIT",
+  "homepage": "https://github.com/aaronsb/salesforce-cloud",
+  "documentation": "https://github.com/aaronsb/salesforce-cloud#readme",
+  "support": "https://github.com/aaronsb/salesforce-cloud/issues",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/aaronsb/salesforce-cloud.git"
+  },
+  "keywords": ["salesforce", "crm", "mcp", "ai", "opportunities", "soql"],
+  "server": {
+    "type": "node",
+    "entry_point": "build/index.js",
+    "mcp_config": {
+      "command": "node",
+      "args": ["${__dirname}/build/index.js"],
+      "env": {
+        "SF_CLIENT_ID": "${env.SF_CLIENT_ID}",
+        "SF_CLIENT_SECRET": "${env.SF_CLIENT_SECRET}",
+        "SF_USERNAME": "${env.SF_USERNAME}",
+        "SF_PASSWORD": "${env.SF_PASSWORD}",
+        "SF_LOGIN_URL": "${env.SF_LOGIN_URL}"
+      }
+    }
+  },
+  "tools": [
+    { "name": "execute_soql", "description": "Execute SOQL queries against Salesforce" },
+    { "name": "list_objects", "description": "List available Salesforce objects" },
+    { "name": "describe_object", "description": "Describe a Salesforce object's fields and metadata" },
+    { "name": "search_opportunities", "description": "Search for opportunities with filters" },
+    { "name": "get_opportunity_details", "description": "Get detailed opportunity information" },
+    { "name": "opportunity_insights", "description": "Get AI-powered insights for opportunities" },
+    { "name": "find_similar_opportunities", "description": "Find similar opportunities by pattern matching" },
+    { "name": "enrich_opportunity", "description": "Enrich opportunity with market intelligence" },
+    { "name": "analyze_conversation", "description": "Analyze conversation activity for an opportunity" },
+    { "name": "generate_business_case", "description": "Generate a business case document" },
+    { "name": "create_record", "description": "Create a new Salesforce record" },
+    { "name": "update_record", "description": "Update an existing Salesforce record" },
+    { "name": "delete_record", "description": "Delete a Salesforce record" },
+    { "name": "get_user_info", "description": "Get current Salesforce user information" }
+  ],
+  "tools_generated": false,
+  "prompts": [],
+  "prompts_generated": false,
+  "user_config": {
+    "SF_LOGIN_URL": {
+      "type": "string",
+      "description": "Salesforce login URL",
+      "default": "https://login.salesforce.com"
+    }
+  },
+  "compatibility": {
+    "platforms": ["darwin", "win32", "linux"],
+    "node": {
+      "minimum_version": ">=20.0.0"
+    }
+  }
+}

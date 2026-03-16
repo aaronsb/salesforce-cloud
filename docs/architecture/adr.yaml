@@ -1,0 +1,45 @@
+# ADR Configuration
+# Defines domain numbering and validation rules.
+# Used by: docs/scripts/adr
+
+project_name: Salesforce Cloud MCP Server
+
+# Domain Number Series
+domains:
+  core:
+    range: [100, 199]
+    name: Core
+    description: MCP protocol patterns, tool lifecycle, server architecture
+    folder: core
+
+  infra:
+    range: [200, 299]
+    name: Infrastructure
+    description: CI/CD, packaging, deployment, Docker
+    folder: infrastructure
+
+  api:
+    range: [300, 399]
+    name: API
+    description: Salesforce API interaction, authentication, query patterns
+    folder: api
+
+# Valid ADR statuses
+statuses:
+  - Draft
+  - Proposed
+  - Accepted
+  - Superseded
+  - Deprecated
+
+# Default values for new ADRs
+defaults:
+  deciders: [aaronsb]
+  status: Draft
+
+# Legacy ADR range (pre-domain numbering)
+legacy:
+  range: [1, 99]
+  label: "Legacy"
+
+viewer: cat {file}
