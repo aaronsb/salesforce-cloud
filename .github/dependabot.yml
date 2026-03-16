@@ -48,15 +48,8 @@ updates:
       prefix: "chore"
       prefix-development: "chore"
       include: "scope"
-    # Ignore specific versions if needed
+    # Major version updates require manual review
     ignore:
-      # ESLint 9.x requires significant config changes
-      - dependency-name: "eslint"
-        versions: ["9.x"]
-      # TypeScript ESLint 8.x may have breaking changes
-      - dependency-name: "@typescript-eslint/*"
-        versions: ["8.x"]
-      # Major version updates require manual review
       - dependency-name: "*"
         update-types: ["version-update:semver-major"]
 
