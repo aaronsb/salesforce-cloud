@@ -66,17 +66,3 @@ updates:
       - "github-actions"
     commit-message:
       prefix: "ci"
-
-  # Docker base image updates (if Dockerfile exists)
-  - package-ecosystem: "docker"
-    directory: "/"
-    schedule:
-      interval: "weekly"
-      day: "monday"
-      time: "09:00"
-      timezone: "America/Los_Angeles"
-    labels:
-      - "dependencies"
-      - "docker"
-    commit-message:
-      prefix: "build"
