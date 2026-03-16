@@ -70,19 +70,7 @@ The Model Context Protocol (MCP) is a standardized way for AI models to interact
 
 ## 🚀 Installation
 
-### Local Installation
-
-1. Clone this repository
-2. Install dependencies:
-```bash
-npm install
-```
-3. Build the server:
-```bash
-npm run build
-```
-
-### npm Installation
+### npm (recommended)
 
 ```bash
 # Run directly with npx
