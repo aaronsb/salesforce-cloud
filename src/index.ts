@@ -35,28 +35,6 @@ class SalesforceServer {
     console.error('Loading tool schemas...');
     console.error('Available schemas:', Object.keys(toolSchemas));
 
-    // Convert tool schemas to the format expected by the MCP SDK
-    const tools = Object.entries(toolSchemas).map(([key, schema]) => {
-      console.error(`Registering tool: ${key}`);
-      const inputSchema = {
-        type: 'object',
-        properties: schema.inputSchema.properties,
-      } as const;
-
-      // Only add required field if it exists in the schema
-      if ('required' in schema.inputSchema) {
-        Object.assign(inputSchema, { required: schema.inputSchema.required });
-      }
-
-      return {
-        name: key,
-        description: schema.description,
-        inputSchema,
-      };
-    });
-
-    console.error('Initializing server with tools:', JSON.stringify(tools, null, 2));
-
     // Use environment-provided name or default to 'salesforce-cloud'
     const serverName = process.env.MCP_SERVER_NAME || 'salesforce-cloud';
     console.error(`Using server name: ${serverName}`);
