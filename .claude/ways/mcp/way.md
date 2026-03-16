@@ -1,6 +1,6 @@
 ---
 description: MCP server tool development pattern, handler registration, schema definitions
-vocabulary: mcp tool handler schema register server transport stdio protocol model context
+vocabulary: mcp tool handler schema register server transport stdio protocol model context manifest mcpb
 pattern: tool-schemas|handlers/|McpError|ListToolsRequest|CallToolRequest
 threshold: 2.0
 ---

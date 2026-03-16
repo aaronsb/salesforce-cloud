@@ -9,7 +9,7 @@ domains:
   core:
     range: [100, 199]
     name: Core
-    description: MCP server patterns, tool design, Salesforce integration
+    description: MCP protocol patterns, tool lifecycle, server architecture
     folder: core
 
   infra:
