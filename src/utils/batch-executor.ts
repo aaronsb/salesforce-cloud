@@ -160,12 +160,20 @@ export function preScanBatch(operations: BatchOperation[]): PreScanResult {
     };
   }
 
-  if (updateCount > 5) {
-    return {
-      ok: false,
-      message: `Warning: ${updateCount} update operations in a single batch. Consider breaking into smaller batches.`,
-      unconfirmedDeletes: [],
-    };
+  // Check for forward references in args (static validation)
+  for (let i = 0; i < operations.length; i++) {
+    const argsStr = JSON.stringify(operations[i].args);
+    const refs = argsStr.matchAll(/\$(\d+)\.\w+/g);
+    for (const match of refs) {
+      const refIndex = parseInt(match[1], 10);
+      if (refIndex >= i) {
+        return {
+          ok: false,
+          message: `Operation ${i} references $${refIndex} which has not executed yet. References must point backwards.`,
+          unconfirmedDeletes: [],
+        };
+      }
+    }
   }
 
   return { ok: true, unconfirmedDeletes: [] };

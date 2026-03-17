@@ -107,13 +107,22 @@ describe('batch-executor', () => {
       expect(result.message).toContain('Max 3 delete');
     });
 
-    it('should warn on many updates', () => {
+    it('should allow many updates (warning only, not blocking)', () => {
       const ops: BatchOperation[] = Array.from({ length: 6 }, () => ({
         tool: 'update_record', args: {},
       }));
       const result = preScanBatch(ops);
+      expect(result.ok).toBe(true);
+    });
+
+    it('should reject forward references in pre-scan', () => {
+      const ops: BatchOperation[] = [
+        { tool: 'create_record', args: { AccountId: '$1.id' } },
+        { tool: 'create_record', args: {} },
+      ];
+      const result = preScanBatch(ops);
       expect(result.ok).toBe(false);
-      expect(result.message).toContain('6 update operations');
+      expect(result.message).toContain('has not executed yet');
     });
   });
 
