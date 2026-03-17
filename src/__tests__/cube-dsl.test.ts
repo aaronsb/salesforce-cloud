@@ -184,6 +184,20 @@ describe('cube-dsl', () => {
       expect(results[0]).toEqual({ name: 'gte', value: 'Yes' });
       expect(results[1]).toEqual({ name: 'lte', value: 'Yes' });
     });
+
+    it('should handle comparison inside parentheses', () => {
+      const cols = parseComputeList(['score = (amount > 100) * 10']);
+      const values = new Map([['amount', 250]]);
+      const results = evaluateRow(cols, values);
+      expect(results[0]).toEqual({ name: 'score', value: 10 }); // (true=1) * 10
+    });
+
+    it('should handle unary minus', () => {
+      const cols = parseComputeList(['neg = -a + b']);
+      const values = new Map([['a', 10], ['b', 3]]);
+      const results = evaluateRow(cols, values);
+      expect(results[0]).toEqual({ name: 'neg', value: -7 }); // -10 + 3
+    });
   });
 
   describe('extractColumnRefs', () => {
