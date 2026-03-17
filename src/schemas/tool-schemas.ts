@@ -1,4 +1,35 @@
 export const toolSchemas = {
+  analyze: {
+    name: 'analyze',
+    description: 'Run analytics on any Salesforce object — group by categorical fields, aggregate numeric fields, and compute custom expressions. Uses field-type metadata for validation.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        object: {
+          type: 'string',
+          description: 'Salesforce object API name (e.g., Opportunity, Account, Lead)',
+        },
+        filter: {
+          type: 'string',
+          description: 'SOQL WHERE clause (e.g., "StageName = \'Closed Won\' AND Amount > 100000")',
+        },
+        groupBy: {
+          type: 'string',
+          description: 'Field to group by (must be picklist, boolean, or similar categorical field)',
+        },
+        compute: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Computed expressions (max 5). Format: name = expr. E.g., ["win_rate = won / total * 100"]',
+        },
+        maxGroups: {
+          type: 'number',
+          description: 'Max groups to return (default: 20)',
+        },
+      },
+      required: ['object'],
+    },
+  },
   analyze_conversation: {
     name: 'analyze_conversation',
     description: 'Analyze conversation activity and engagement patterns for an opportunity. Extracts insights from Gong calls, emails, and other activities to provide engagement recommendations.',
