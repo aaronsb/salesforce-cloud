@@ -28,8 +28,17 @@ export async function checkEpochs(
 ): Promise<EpochResult[]> {
   if (ids.length === 0) return [];
 
+  // Validate objectType — must be a valid Salesforce API name
+  if (!/^[a-zA-Z_]\w*$/.test(objectType)) {
+    throw new Error(`Invalid object type: "${objectType}"`);
+  }
+
+  // Validate IDs — Salesforce IDs are 15 or 18 char alphanumeric
+  const validIds = ids.filter(id => /^[a-zA-Z0-9]{15,18}$/.test(id));
+  if (validIds.length === 0) return [];
+
   // Fetch current SystemModstamp for all IDs in one lightweight query
-  const idList = ids.map(id => `'${id}'`).join(',');
+  const idList = validIds.map(id => `'${id}'`).join(',');
   const query = `SELECT Id, Name, SystemModstamp FROM ${objectType} WHERE Id IN (${idList})`;
 
   let freshRecords: Array<Record<string, unknown>>;

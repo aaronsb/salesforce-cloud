@@ -17,36 +17,36 @@ describe('epoch-check', () => {
   describe('checkEpochs', () => {
     it('should return unchanged for records with matching epoch', async () => {
       const epoch = '2026-03-16T14:00:00Z';
-      cache.setRecord('Opportunity', '006A', { Name: 'Deal A' }, epoch);
+      cache.setRecord('Opportunity', '006000000000AAA', { Name: 'Deal A' }, epoch);
 
       mockClient.executeQuery.mockResolvedValue({
-        results: [{ Id: '006A', Name: 'Deal A', SystemModstamp: epoch }],
+        results: [{ Id: '006000000000AAA', Name: 'Deal A', SystemModstamp: epoch }],
       });
 
-      const results = await checkEpochs(mockClient, cache, 'Opportunity', ['006A']);
+      const results = await checkEpochs(mockClient, cache, 'Opportunity', ['006000000000AAA']);
       expect(results).toHaveLength(1);
       expect(results[0].status).toBe('unchanged');
       expect(results[0].text).toContain('unchanged');
     });
 
     it('should return changed for records with different epoch', async () => {
-      cache.setRecord('Opportunity', '006A', { Name: 'Deal A', StageName: 'Proposal' }, '2026-03-16T14:00:00Z');
+      cache.setRecord('Opportunity', '006000000000AAA', { Name: 'Deal A', StageName: 'Proposal' }, '2026-03-16T14:00:00Z');
 
       mockClient.executeQuery.mockResolvedValue({
-        results: [{ Id: '006A', Name: 'Deal A', StageName: 'Negotiation', SystemModstamp: '2026-03-16T15:00:00Z' }],
+        results: [{ Id: '006000000000AAA', Name: 'Deal A', StageName: 'Negotiation', SystemModstamp: '2026-03-16T15:00:00Z' }],
       });
 
-      const results = await checkEpochs(mockClient, cache, 'Opportunity', ['006A']);
+      const results = await checkEpochs(mockClient, cache, 'Opportunity', ['006000000000AAA']);
       expect(results).toHaveLength(1);
       expect(results[0].status).toBe('changed');
     });
 
     it('should return deleted for records not in query results', async () => {
-      cache.setRecord('Opportunity', '006A', { Name: 'Deal A' }, '2026-03-16T14:00:00Z');
+      cache.setRecord('Opportunity', '006000000000AAA', { Name: 'Deal A' }, '2026-03-16T14:00:00Z');
 
       mockClient.executeQuery.mockResolvedValue({ results: [] });
 
-      const results = await checkEpochs(mockClient, cache, 'Opportunity', ['006A']);
+      const results = await checkEpochs(mockClient, cache, 'Opportunity', ['006000000000AAA']);
       expect(results).toHaveLength(1);
       expect(results[0].status).toBe('deleted');
       expect(results[0].text).toContain('deleted');
@@ -54,27 +54,27 @@ describe('epoch-check', () => {
 
     it('should return new-to-cache for uncached records', async () => {
       mockClient.executeQuery.mockResolvedValue({
-        results: [{ Id: '006B', Name: 'New Deal', SystemModstamp: '2026-03-16T15:00:00Z' }],
+        results: [{ Id: '006000000000BBB', Name: 'New Deal', SystemModstamp: '2026-03-16T15:00:00Z' }],
       });
 
-      const results = await checkEpochs(mockClient, cache, 'Opportunity', ['006B']);
+      const results = await checkEpochs(mockClient, cache, 'Opportunity', ['006000000000BBB']);
       expect(results).toHaveLength(1);
       expect(results[0].status).toBe('changed');
       expect(results[0].text).toContain('new to cache');
     });
 
     it('should handle multiple records in one call', async () => {
-      cache.setRecord('Account', 'A1', { Name: 'Acme' }, 'epoch1');
-      cache.setRecord('Account', 'A2', { Name: 'Beta' }, 'epoch2');
+      cache.setRecord('Account', '001000000000AA1', { Name: 'Acme' }, 'epoch1');
+      cache.setRecord('Account', '001000000000AA2', { Name: 'Beta' }, 'epoch2');
 
       mockClient.executeQuery.mockResolvedValue({
         results: [
-          { Id: 'A1', Name: 'Acme', SystemModstamp: 'epoch1' }, // unchanged
-          { Id: 'A2', Name: 'Beta Corp', SystemModstamp: 'epoch3' }, // changed
+          { Id: '001000000000AA1', Name: 'Acme', SystemModstamp: 'epoch1' }, // unchanged
+          { Id: '001000000000AA2', Name: 'Beta Corp', SystemModstamp: 'epoch3' }, // changed
         ],
       });
 
-      const results = await checkEpochs(mockClient, cache, 'Account', ['A1', 'A2']);
+      const results = await checkEpochs(mockClient, cache, 'Account', ['001000000000AA1', '001000000000AA2']);
       expect(results).toHaveLength(2);
       expect(results[0].status).toBe('unchanged');
       expect(results[1].status).toBe('changed');
@@ -89,7 +89,7 @@ describe('epoch-check', () => {
     it('should handle query failure gracefully', async () => {
       mockClient.executeQuery.mockRejectedValue(new Error('API limit'));
 
-      const results = await checkEpochs(mockClient, cache, 'Opportunity', ['006A']);
+      const results = await checkEpochs(mockClient, cache, 'Opportunity', ['006000000000AAA']);
       expect(results).toHaveLength(1);
       expect(results[0].status).toBe('changed');
       expect(results[0].text).toContain('cache check failed');
