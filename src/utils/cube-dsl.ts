@@ -105,12 +105,21 @@ function evaluate(tokens: Token[], columns: Map<string, number>): number | strin
     const tok = peek();
     if (!tok) throw new Error('Unexpected end of expression');
 
+    // Unary minus
+    if (tok.type === 'op' && tok.value === '-') {
+      advance();
+      return -primary();
+    }
+
     if (tok.type === 'paren' && tok.value === '(') {
       advance();
-      const val = additiveExpr();
+      // Delegate to comparisonExpr so (a > b) works inside parens
+      const val = comparisonExpr();
       const close = peek();
       if (!close || close.value !== ')') throw new Error('Missing closing parenthesis');
       advance();
+      // Coerce comparison results to number for arithmetic context
+      if (typeof val === 'string') return val === 'Yes' ? 1 : 0;
       return val;
     }
 
