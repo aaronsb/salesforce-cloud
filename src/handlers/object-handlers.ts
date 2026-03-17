@@ -1,6 +1,7 @@
 import { McpError, ErrorCode } from '@modelcontextprotocol/sdk/types.js';
 import { SalesforceClient } from '../client/salesforce-client.js';
 import { PaginationParams } from '../types/index.js';
+import { simpleResponse } from '../utils/response-helper.js';
 
 interface DescribeObjectParams {
   objectName: string;
@@ -30,16 +31,27 @@ export async function handleDescribeObject(client: SalesforceClient, args: any) 
     args.objectName,
     args.includeFields,
     pagination
-  );
+  ) as unknown as Record<string, unknown>;
 
-  return {
-    content: [
-      {
-        type: 'text',
-        text: JSON.stringify(metadata, null, 2),
-      },
-    ],
-  };
+  // Render describe results as structured markdown
+  const lines: string[] = [`# ${args.objectName}`];
+
+  if (metadata.label) lines.push(`**Label:** ${metadata.label}`);
+  if (metadata.keyPrefix) lines.push(`**Key Prefix:** ${metadata.keyPrefix}`);
+  if (metadata.recordCount != null) lines.push(`**Records:** ${metadata.recordCount}`);
+
+  const fields = metadata.fields as Array<Record<string, unknown>> | undefined;
+  if (fields && fields.length > 0) {
+    lines.push('');
+    lines.push(`## Fields (${fields.length})`);
+    lines.push('Name | Type | Label');
+    lines.push('--- | --- | ---');
+    for (const f of fields) {
+      lines.push(`${f.name} | ${f.type} | ${f.label || ''}`);
+    }
+  }
+
+  return simpleResponse(lines.join('\n'), 'describe_object', { objectName: args.objectName });
 }
 
 export async function handleListObjects(client: SalesforceClient, args: any) {
@@ -48,14 +60,17 @@ export async function handleListObjects(client: SalesforceClient, args: any) {
     pageNumber: typeof args?.pageNumber === 'number' ? args.pageNumber : undefined
   };
 
-  const objects = await client.listObjects(pagination);
+  const objects = await client.listObjects(pagination) as unknown as Record<string, unknown>;
 
-  return {
-    content: [
-      {
-        type: 'text',
-        text: JSON.stringify(objects, null, 2),
-      },
-    ],
-  };
+  const results = (objects.results || []) as Array<Record<string, unknown>>;
+  const lines: string[] = [`## Salesforce Objects (${results.length})`];
+  for (const obj of results) {
+    lines.push(`- **${obj.name}** — ${obj.label || ''}`);
+  }
+
+  if (objects.totalPages && ((objects.pageNumber as number) || 1) < (objects.totalPages as number)) {
+    lines.push(`\nPage ${objects.pageNumber || 1}/${objects.totalPages} — use pageNumber to see more`);
+  }
+
+  return simpleResponse(lines.join('\n'), 'list_objects');
 }
