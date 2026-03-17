@@ -348,10 +348,16 @@ describe('field-type-map', () => {
       ).toThrow(/binary type/);
     });
 
-    it('should handle boolean equality', () => {
+    it('should handle boolean equality with bare literal', () => {
       const info = getComputationType('boolean');
       const result = getSoqlFilter('IsWon', info, '=', 'true');
-      expect(result).toBe("IsWon = 'true'");
+      expect(result).toBe('IsWon = true');
+    });
+
+    it('should escape single quotes in string values', () => {
+      const info = getComputationType('string');
+      const result = getSoqlFilter('LastName', info, '=', "O'Brien");
+      expect(result).toBe("LastName = 'O\\'Brien'");
     });
 
     it('should handle date comparisons', () => {

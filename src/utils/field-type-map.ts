@@ -332,9 +332,21 @@ export function getSoqlFilter(
     return `${fieldName} EXCLUDES ('${String(value)}')`;
   }
 
+  // Boolean fields use bare true/false literals in SOQL
+  if (computationType === 'flag') {
+    const boolVal = String(value).toLowerCase();
+    if (boolVal !== 'true' && boolVal !== 'false') {
+      throw new Error(`Field "${fieldName}" is boolean — value must be true or false, got "${value}".`);
+    }
+    return `${fieldName} ${normalizedOp} ${boolVal}`;
+  }
+
   // Standard operators with type-appropriate value formatting
+  // Escape single quotes in string values per SOQL convention
   const formattedValue =
-    typeof value === 'number' ? String(value) : `'${String(value)}'`;
+    typeof value === 'number'
+      ? String(value)
+      : `'${String(value).replace(/'/g, "\\'")}'`;
 
   return `${fieldName} ${normalizedOp} ${formattedValue}`;
 }
