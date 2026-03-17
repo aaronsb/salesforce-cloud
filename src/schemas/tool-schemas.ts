@@ -166,6 +166,16 @@ export const toolSchemas = {
         opportunityId: {
           type: 'string',
           description: 'The ID of the Salesforce opportunity to retrieve details for',
+        },
+        intent: {
+          type: 'string',
+          enum: ['pipeline', 'engagement', 'forecasting', 'reporting', 'contact-mapping'],
+          description: 'Business intent — selects relevant fields automatically. Omit for all fields.',
+        },
+        fields: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Explicit field names to return. Overrides intent if both provided.',
         }
       },
       required: ['opportunityId'],
@@ -243,6 +253,11 @@ export const toolSchemas = {
         pageNumber: {
           type: 'number',
           description: 'Page number to retrieve when includeFields is true (default: 1)',
+        },
+        intent: {
+          type: 'string',
+          enum: ['pipeline', 'engagement', 'forecasting', 'reporting', 'contact-mapping'],
+          description: 'Business intent — filters fields to only those relevant for this use case.',
         }
       },
       required: ['objectName'],
