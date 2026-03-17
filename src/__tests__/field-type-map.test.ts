@@ -7,9 +7,6 @@ import {
   getGroupByFields,
   getAggregateFields,
   getSoqlFilter,
-  ComputationType,
-  FieldTypeInfo,
-  FieldTypeEntry,
 } from '../utils/field-type-map';
 
 describe('field-type-map', () => {
