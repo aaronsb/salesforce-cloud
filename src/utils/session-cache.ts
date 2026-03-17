@@ -134,7 +134,7 @@ export class SessionCache {
       existing.tombstoned = true;
       existing.data = null;
       existing.size = 0;
-      existing.lastAccessed = Date.now();
+      existing.lastAccessed = ++this.accessCounter;
     } else {
       this.records.set(key, {
         data: null,
