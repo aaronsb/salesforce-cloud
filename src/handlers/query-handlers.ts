@@ -1,10 +1,12 @@
 import { McpError, ErrorCode } from '@modelcontextprotocol/sdk/types.js';
-import { SalesforceClient } from '../client/salesforce-client';
+import { SalesforceClient } from '../client/salesforce-client.js';
+import { queryResponse } from '../utils/response-helper.js';
 
 export interface QueryParams {
   query: string;
   pageSize?: number;
   pageNumber?: number;
+  detail?: 'summary' | 'full';
 }
 
 function isQueryParams(obj: any): obj is QueryParams {
@@ -24,12 +26,5 @@ export async function handleExecuteSOQL(client: SalesforceClient, args: any) {
     pageNumber: args.pageNumber
   });
 
-  return {
-    content: [
-      {
-        type: 'text',
-        text: JSON.stringify(records, null, 2),
-      },
-    ],
-  };
+  return queryResponse(records as Record<string, unknown>, 'execute_soql', args.detail);
 }

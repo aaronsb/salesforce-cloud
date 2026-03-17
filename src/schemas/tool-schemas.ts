@@ -166,6 +166,11 @@ export const toolSchemas = {
         opportunityId: {
           type: 'string',
           description: 'The ID of the Salesforce opportunity to retrieve details for',
+        },
+        detail: {
+          type: 'string',
+          enum: ['summary', 'full'],
+          description: 'Response detail level (default: full)',
         }
       },
       required: ['opportunityId'],
@@ -196,6 +201,11 @@ export const toolSchemas = {
         pageNumber: {
           type: 'number',
           description: 'Page number to retrieve (default: 1)',
+        },
+        detail: {
+          type: 'string',
+          enum: ['summary', 'full'],
+          description: 'Response detail level (default: summary)',
         }
       }
     },
@@ -217,6 +227,11 @@ export const toolSchemas = {
         pageNumber: {
           type: 'number',
           description: 'Page number to retrieve (default: 1)',
+        },
+        detail: {
+          type: 'string',
+          enum: ['summary', 'full'],
+          description: 'Response detail level (default: summary)',
         }
       },
       required: ['query'],

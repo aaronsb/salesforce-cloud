@@ -1,5 +1,6 @@
 import { McpError, ErrorCode } from '@modelcontextprotocol/sdk/types.js';
 import { SalesforceClient } from '../client/salesforce-client.js';
+import { simpleResponse } from '../utils/response-helper.js';
 
 interface CreateRecordParams {
   objectName: string;
@@ -55,16 +56,13 @@ export async function handleCreateRecord(client: SalesforceClient, args: any) {
     );
   }
 
-  const result = await client.createRecord(args.objectName, args.data);
-
-  return {
-    content: [
-      {
-        type: 'text',
-        text: JSON.stringify(result, null, 2),
-      },
-    ],
-  };
+  const result = await client.createRecord(args.objectName, args.data) as Record<string, any>;
+  const id = result?.id || result?.Id || 'unknown';
+  return simpleResponse(
+    `Created ${args.objectName} record: ${id}`,
+    'create_record',
+    { id, objectName: args.objectName },
+  );
 }
 
 export async function handleUpdateRecord(client: SalesforceClient, args: any) {
@@ -75,20 +73,12 @@ export async function handleUpdateRecord(client: SalesforceClient, args: any) {
     );
   }
 
-  const result = await client.updateRecord(
-    args.objectName,
-    args.recordId,
-    args.data
+  await client.updateRecord(args.objectName, args.recordId, args.data);
+  return simpleResponse(
+    `Updated ${args.objectName} record: ${args.recordId}`,
+    'update_record',
+    { recordId: args.recordId, objectName: args.objectName },
   );
-
-  return {
-    content: [
-      {
-        type: 'text',
-        text: JSON.stringify(result, null, 2),
-      },
-    ],
-  };
 }
 
 export async function handleDeleteRecord(client: SalesforceClient, args: any) {
@@ -99,14 +89,10 @@ export async function handleDeleteRecord(client: SalesforceClient, args: any) {
     );
   }
 
-  const result = await client.deleteRecord(args.objectName, args.recordId);
-
-  return {
-    content: [
-      {
-        type: 'text',
-        text: JSON.stringify(result, null, 2),
-      },
-    ],
-  };
+  await client.deleteRecord(args.objectName, args.recordId);
+  return simpleResponse(
+    `Deleted ${args.objectName} record: ${args.recordId}`,
+    'delete_record',
+    { recordId: args.recordId, objectName: args.objectName },
+  );
 }
