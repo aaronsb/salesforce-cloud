@@ -35,7 +35,9 @@ export function listResponse(
   toolName: string,
   detail: Detail = 'summary',
 ) {
-  return respond(renderList(objectName, records, detail, pagination), toolName);
+  // Pass first record as context so next-steps can reference IDs
+  const context = records.length > 0 ? records[0] : { objectName };
+  return respond(renderList(objectName, records, detail, pagination), toolName, context as Record<string, unknown>);
 }
 
 /** Render a SOQL query result */
@@ -44,7 +46,7 @@ export function queryResponse(
   toolName: string,
   detail: Detail = 'summary',
 ) {
-  return respond(renderQueryResult(queryResult, detail), toolName);
+  return respond(renderQueryResult(queryResult, detail), toolName, queryResult);
 }
 
 /** Render a single generic record */
