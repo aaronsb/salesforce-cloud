@@ -43,7 +43,7 @@ class SalesforceServer {
     this.server = new Server(
       {
         name: serverName,
-        version: '0.1.0',
+        version: '0.2.0',
         description: 'Salesforce Cloud MCP Server - Provides tools for interacting with Salesforce'
       },
       {
