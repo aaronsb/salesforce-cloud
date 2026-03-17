@@ -142,12 +142,12 @@ export function renderOpportunity(opp: Record<string, any>, detail: 'summary' | 
   // Core fields
   lines.push(`**Stage:** ${formatStatus(opp.StageName || opp.stage)}`);
   lines.push(`**Amount:** ${formatAmount(opp.Amount ?? opp.amount)}`);
-  if (opp.Probability ?? opp.probability) lines.push(`**Probability:** ${opp.Probability ?? opp.probability}%`);
+  if ((opp.Probability ?? opp.probability) != null) lines.push(`**Probability:** ${opp.Probability ?? opp.probability}%`);
   if (opp.CloseDate || opp.close_date) lines.push(`**Close Date:** ${formatDate(opp.CloseDate || opp.close_date)}`);
   if (opp.Type || opp.type) lines.push(`**Type:** ${opp.Type || opp.type}`);
   if (opp.LeadSource || opp.lead_source) lines.push(`**Lead Source:** ${opp.LeadSource || opp.lead_source}`);
   if (opp.ForecastCategory || opp.forecast_category) lines.push(`**Forecast:** ${opp.ForecastCategory || opp.forecast_category}`);
-  if (opp.ExpectedRevenue ?? opp.expected_revenue) lines.push(`**Expected Revenue:** ${formatAmount(opp.ExpectedRevenue ?? opp.expected_revenue)}`);
+  if ((opp.ExpectedRevenue ?? opp.expected_revenue) != null) lines.push(`**Expected Revenue:** ${formatAmount(opp.ExpectedRevenue ?? opp.expected_revenue)}`);
   if (opp.NextStep || opp.next_step) lines.push(`**Next Step:** ${opp.NextStep || opp.next_step}`);
   if (opp.LastActivityDate || opp.last_activity_date) lines.push(`**Last Activity:** ${formatDate(opp.LastActivityDate || opp.last_activity_date)}`);
 
