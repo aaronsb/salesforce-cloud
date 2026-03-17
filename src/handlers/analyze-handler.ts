@@ -7,11 +7,12 @@ import { SalesforceClient } from '../client/salesforce-client.js';
 import { buildFieldTypeMap, getGroupByFields, getAggregateFields } from '../utils/field-type-map.js';
 import { parseComputeList, evaluateRow } from '../utils/cube-dsl.js';
 
+const MAX_GROUPS = 100;
+
 interface AnalyzeParams {
   object: string;
   filter?: string;
   groupBy?: string;
-  metrics?: string[];
   compute?: string[];
   maxGroups?: number;
 }
@@ -20,12 +21,36 @@ function isAnalyzeParams(obj: any): obj is AnalyzeParams {
   return typeof obj === 'object' && obj !== null && typeof obj.object === 'string';
 }
 
+/**
+ * Validate and sanitize filter input.
+ * Rejects obviously dangerous patterns while allowing valid SOQL WHERE clauses.
+ */
+function sanitizeFilter(filter: string): string {
+  // Reject semicolons, comments, and DML keywords
+  if (/;|--|\/\*|\*\/|INSERT|UPDATE|DELETE|UPSERT|MERGE/i.test(filter)) {
+    throw new McpError(
+      ErrorCode.InvalidParams,
+      'Filter contains disallowed characters or keywords.',
+    );
+  }
+  return filter.trim();
+}
+
 export async function handleAnalyze(client: SalesforceClient, args: any) {
   if (!isAnalyzeParams(args)) {
     throw new McpError(ErrorCode.InvalidParams, 'object is required');
   }
 
-  const { object, filter, groupBy, compute, maxGroups = 20 } = args;
+  const { object, groupBy, compute } = args;
+  const maxGroups = Math.min(args.maxGroups ?? 20, MAX_GROUPS);
+
+  // Validate object name
+  if (!/^[a-zA-Z_]\w*$/.test(object)) {
+    throw new McpError(ErrorCode.InvalidParams, `Invalid object name: "${object}"`);
+  }
+
+  // Sanitize filter if provided
+  const filter = args.filter ? sanitizeFilter(args.filter) : undefined;
 
   // Get object metadata for field type validation
   const metadata = await client.describeObject(object, true);
@@ -43,13 +68,12 @@ export async function handleAnalyze(client: SalesforceClient, args: any) {
     }
   }
 
-  // Build base query
   const whereClause = filter ? ` WHERE ${filter}` : '';
 
   if (groupBy) {
-    // Grouped analysis — count per group, with optional aggregates
-    const numericFields = getAggregateFields(fieldMap).map(f => f.fieldName);
-    const aggExprs = numericFields.slice(0, 3).map(f => `SUM(${f}), AVG(${f})`).join(', ');
+    // Grouped analysis — count per group, with explicit aliases
+    const numericFields = getAggregateFields(fieldMap).map(f => f.fieldName).slice(0, 3);
+    const aggExprs = numericFields.map(f => `SUM(${f}) sum_${f}, AVG(${f}) avg_${f}`).join(', ');
     const aggPart = aggExprs ? `, ${aggExprs}` : '';
 
     const query = `SELECT ${groupBy}, COUNT(Id) cnt${aggPart} FROM ${object}${whereClause} GROUP BY ${groupBy} ORDER BY COUNT(Id) DESC LIMIT ${maxGroups}`;
@@ -57,13 +81,11 @@ export async function handleAnalyze(client: SalesforceClient, args: any) {
     const result = await client.executeQuery(query);
     const rows = (result.results || []) as Array<Record<string, unknown>>;
 
-    // Render as markdown table
     const lines: string[] = [`## ${object} by ${groupBy}`];
     lines.push(`${rows.length} groups | filter: ${filter || 'none'}`);
     lines.push('');
 
     if (rows.length > 0) {
-      // Build header from first row's keys
       const keys = Object.keys(rows[0]).filter(k => k !== 'attributes');
       lines.push(keys.join(' | '));
       lines.push(keys.map(() => '---').join(' | '));
@@ -103,14 +125,16 @@ export async function handleAnalyze(client: SalesforceClient, args: any) {
   const countResult = await client.executeQuery(countQuery);
   const total = ((countResult.results?.[0] as Record<string, unknown>)?.cnt as number) || 0;
 
-  // Get numeric field summaries
   const numericFields = getAggregateFields(fieldMap).map(f => f.fieldName).slice(0, 5);
   const lines: string[] = [`## ${object} Summary`];
   lines.push(`**Total records:** ${total}`);
   lines.push(`**Filter:** ${filter || 'none'}`);
 
   if (numericFields.length > 0 && total > 0) {
-    const aggParts = numericFields.map(f => `SUM(${f}), AVG(${f}), MIN(${f}), MAX(${f})`).join(', ');
+    // Use explicit aliases so we can read results reliably
+    const aggParts = numericFields.map(f =>
+      `SUM(${f}) sum_${f}, AVG(${f}) avg_${f}, MIN(${f}) min_${f}, MAX(${f}) max_${f}`
+    ).join(', ');
     const aggQuery = `SELECT ${aggParts} FROM ${object}${whereClause}`;
     try {
       const aggResult = await client.executeQuery(aggQuery);
@@ -120,7 +144,7 @@ export async function handleAnalyze(client: SalesforceClient, args: any) {
       lines.push('Field | Sum | Avg | Min | Max');
       lines.push('--- | --- | --- | --- | ---');
       for (const f of numericFields) {
-        const sum = agg[`sum_${f}`] ?? agg[`expr0`] ?? '';
+        const sum = agg[`sum_${f}`] ?? '';
         const avg = agg[`avg_${f}`] ?? '';
         const min = agg[`min_${f}`] ?? '';
         const max = agg[`max_${f}`] ?? '';
