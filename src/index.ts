@@ -25,6 +25,7 @@ import { handleGenerateBusinessCase } from './handlers/business-case-handlers.js
 import { handleEnrichOpportunity } from './handlers/enrichment-handlers.js';
 import { handleFindSimilarOpportunities } from './handlers/pattern-handlers.js';
 import { handleOpportunityInsights } from './handlers/insights-handlers.js';
+import { handleAnalyze } from './handlers/analyze-handler.js';
 import { toolSchemas } from './schemas/tool-schemas.js';
 
 class SalesforceServer {
@@ -99,6 +100,9 @@ class SalesforceServer {
 
       try {
         switch (name) {
+          case 'analyze':
+            return await handleAnalyze(this.sfClient, request.params.arguments);
+
           case 'execute_soql':
             return await handleExecuteSOQL(this.sfClient, request.params.arguments);
 

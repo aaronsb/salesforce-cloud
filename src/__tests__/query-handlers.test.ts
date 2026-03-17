@@ -44,28 +44,18 @@ describe('Query Handlers', () => {
     });
 
     it('should execute SOQL query successfully', async () => {
-      const queryResult = {
-        totalCount: 1,
-        pageSize: 25,
-        pageNumber: 1,
-        totalPages: 1,
-        results: [{ Id: '001', Name: 'Test Account' }]
-      };
-
       const params = {
         query: 'SELECT Id, Name FROM Account'
       };
 
       const result = await handleExecuteSOQL(mockClient, params);
 
-      expect(result).toEqual({
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify(queryResult, null, 2),
-          },
-        ],
-      });
+      // Response is now markdown (ADR-100) with next-steps appended
+      expect(result.content).toHaveLength(1);
+      expect(result.content[0].type).toBe('text');
+      expect(result.content[0].text).toContain('Query Results');
+      expect(result.content[0].text).toContain('Test Account');
+      expect(result.content[0].text).toContain('Next steps');
     });
 
     it('should handle invalid parameters', async () => {

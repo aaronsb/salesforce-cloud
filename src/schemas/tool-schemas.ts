@@ -1,4 +1,35 @@
 export const toolSchemas = {
+  analyze: {
+    name: 'analyze',
+    description: 'Run analytics on any Salesforce object — group by categorical fields, aggregate numeric fields, and compute custom expressions. Uses field-type metadata for validation.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        object: {
+          type: 'string',
+          description: 'Salesforce object API name (e.g., Opportunity, Account, Lead)',
+        },
+        filter: {
+          type: 'string',
+          description: 'SOQL WHERE clause (e.g., "StageName = \'Closed Won\' AND Amount > 100000")',
+        },
+        groupBy: {
+          type: 'string',
+          description: 'Field to group by (must be picklist, boolean, or similar categorical field)',
+        },
+        compute: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Computed expressions (max 5). Format: name = expr. E.g., ["win_rate = won / total * 100"]',
+        },
+        maxGroups: {
+          type: 'number',
+          description: 'Max groups to return (default: 20)',
+        },
+      },
+      required: ['object'],
+    },
+  },
   analyze_conversation: {
     name: 'analyze_conversation',
     description: 'Analyze conversation activity and engagement patterns for an opportunity. Extracts insights from Gong calls, emails, and other activities to provide engagement recommendations.',
@@ -167,15 +198,10 @@ export const toolSchemas = {
           type: 'string',
           description: 'The ID of the Salesforce opportunity to retrieve details for',
         },
-        intent: {
+        detail: {
           type: 'string',
-          enum: ['pipeline', 'engagement', 'forecasting', 'reporting', 'contact-mapping'],
-          description: 'Business intent — selects relevant fields automatically. Omit for all fields.',
-        },
-        fields: {
-          type: 'array',
-          items: { type: 'string' },
-          description: 'Explicit field names to return. Overrides intent if both provided.',
+          enum: ['summary', 'full'],
+          description: 'Response detail level (default: full)',
         }
       },
       required: ['opportunityId'],
@@ -206,6 +232,11 @@ export const toolSchemas = {
         pageNumber: {
           type: 'number',
           description: 'Page number to retrieve (default: 1)',
+        },
+        detail: {
+          type: 'string',
+          enum: ['summary', 'full'],
+          description: 'Response detail level (default: summary)',
         }
       }
     },
@@ -227,6 +258,11 @@ export const toolSchemas = {
         pageNumber: {
           type: 'number',
           description: 'Page number to retrieve (default: 1)',
+        },
+        detail: {
+          type: 'string',
+          enum: ['summary', 'full'],
+          description: 'Response detail level (default: summary)',
         }
       },
       required: ['query'],
@@ -253,11 +289,6 @@ export const toolSchemas = {
         pageNumber: {
           type: 'number',
           description: 'Page number to retrieve when includeFields is true (default: 1)',
-        },
-        intent: {
-          type: 'string',
-          enum: ['pipeline', 'engagement', 'forecasting', 'reporting', 'contact-mapping'],
-          description: 'Business intent — filters fields to only those relevant for this use case.',
         }
       },
       required: ['objectName'],
