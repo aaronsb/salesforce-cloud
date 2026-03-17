@@ -129,7 +129,6 @@ export function preScanBatch(operations: BatchOperation[]): PreScanResult {
 
   const unconfirmedDeletes: number[] = [];
   let deleteCount = 0;
-  let updateCount = 0;
 
   for (let i = 0; i < operations.length; i++) {
     const op = operations[i];
@@ -138,9 +137,6 @@ export function preScanBatch(operations: BatchOperation[]): PreScanResult {
       if (!op.confirm) {
         unconfirmedDeletes.push(i);
       }
-    }
-    if (MUTATIVE_TOOLS.has(op.tool)) {
-      updateCount++;
     }
   }
 

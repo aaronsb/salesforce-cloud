@@ -202,6 +202,16 @@ export const toolSchemas = {
           type: 'string',
           enum: ['summary', 'full'],
           description: 'Response detail level (default: full)',
+        },
+        intent: {
+          type: 'string',
+          enum: ['pipeline', 'engagement', 'forecasting', 'reporting', 'contact-mapping'],
+          description: 'Business intent — selects relevant fields automatically. Omit for all fields.',
+        },
+        fields: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Explicit field names to return. Overrides intent if both provided.',
         }
       },
       required: ['opportunityId'],
@@ -289,6 +299,11 @@ export const toolSchemas = {
         pageNumber: {
           type: 'number',
           description: 'Page number to retrieve when includeFields is true (default: 1)',
+        },
+        intent: {
+          type: 'string',
+          enum: ['pipeline', 'engagement', 'forecasting', 'reporting', 'contact-mapping'],
+          description: 'Business intent — filters fields to only those relevant for this use case.',
         }
       },
       required: ['objectName'],
