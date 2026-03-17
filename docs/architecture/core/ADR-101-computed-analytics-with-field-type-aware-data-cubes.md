@@ -5,6 +5,7 @@ deciders:
   - aaronsb
 related:
   - ADR-100
+  - ADR-104
 ---
 
 # ADR-101: Computed analytics with field-type-aware data cubes
@@ -31,15 +32,22 @@ The jira-cloud server solves this with a cube DSL and budget-aware grouping. We 
 
 Build a lookup table that maps Salesforce field types (from `describe_object`) to computation types:
 
-| SF Field Type | Computation Type | Valid Operations |
-|---|---|---|
-| `currency`, `double`, `int`, `percent` | numeric | sum, avg, min, max, arithmetic |
-| `picklist`, `multipicklist`, `string` | categorical | group-by, count, distribution |
-| `date`, `datetime` | temporal | range, duration, cycle-time |
-| `reference`, `id` | identifier | join, lookup, count-distinct |
-| `boolean` | flag | filter, count-where |
+| SF Field Type | Computation Type | Valid Operations | Notes |
+|---|---|---|---|
+| `currency`, `double`, `int`, `long`, `percent` | numeric | sum, avg, min, max, arithmetic | |
+| `picklist`, `combobox` | categorical | group-by, count, distribution | single-value; use `=` in SOQL |
+| `multipicklist` | categorical | group-by, count, distribution | requires `INCLUDES()` in SOQL, not `=` |
+| `string`, `textarea`, `url`, `email`, `phone` | text | filter (LIKE), count | `textarea` excluded from SOQL WHERE by default (not indexable) |
+| `date`, `datetime`, `time` | temporal | range, duration, cycle-time | `time` is time-of-day only, no date component |
+| `reference` | identifier | join, lookup, count-distinct | resolves to both ID and relationship Name (e.g., `AccountId` + `Account.Name`) |
+| `id` | identifier | lookup, count-distinct | record identifier, always unique |
+| `boolean` | flag | filter, count-where | |
+| `address`, `location` | compound | display-only | not directly queryable in SOQL; use component fields (`BillingCity`, etc.) |
+| `base64` | binary | skip | excluded from analytics and rendering |
 
 The type map is built from cached `describe_object` results (metadata changes rarely). The agent never specifies types — the system infers what operations are valid for each field.
+
+**SOQL-specific handling**: The type map also encodes query semantics. `multipicklist` fields use `INCLUDES('value')` rather than `= 'value'`. `textarea` fields can't appear in WHERE clauses without explicit opt-in. `address` and `location` are compound types that must be decomposed into their component fields for queries. These rules prevent agents from generating invalid SOQL.
 
 ### 2. Bounded compute DSL
 
@@ -75,24 +83,6 @@ The server:
 4. Executes aggregation queries server-side
 5. Renders results as a markdown table (per ADR-100)
 
-### 4. Queue/batch operations with result references
-
-Add a `batch` tool for multi-step operations in a single call:
-
-```typescript
-{
-  operations: [
-    { tool: 'create_record', args: { objectName: 'Account', data: { Name: 'Acme' } } },
-    { tool: 'create_record', args: { objectName: 'Contact', data: { AccountId: '$0.id', LastName: 'Smith' } } }
-  ],
-  onError: 'bail' | 'continue'
-}
-```
-
-- `$N.field` references extract values from prior operation results
-- Per-operation error strategy controls whether failures stop the batch
-- Summary rendering shows one-liner per operation status
-
 ## Consequences
 
 ### Positive
@@ -100,21 +90,24 @@ Add a `batch` tool for multi-step operations in a single call:
 - Agents can request pipeline analytics in one tool call instead of multi-step SOQL construction
 - Works across any Salesforce org regardless of custom field configuration
 - API budget management prevents accidental rate limit exhaustion
-- Batch operations reduce round-trips for create-then-link workflows
 - Type safety catches invalid operations at query time, not after expensive API calls
+- SOQL semantics are encoded in the type map, preventing invalid query generation
 
 ### Negative
 
 - Complexity: the type map, DSL parser, and budget calculator are non-trivial to implement
 - `describe_object` caching adds a startup cost and cache invalidation concern
 - The DSL is intentionally limited — agents needing complex analytics must still construct SOQL
-- Batch operations need careful error handling for partial failures
 
 ### Neutral
 
-- The field-type map becomes a shared utility used by both analytics and the rendering layer (ADR-100)
+- The field-type map becomes a shared utility used by analytics, rendering (ADR-100), elicitation (ADR-103), and batch validation (ADR-104)
 - Implicit measures (like "overdue" or "stale") can be defined per-object as the system matures
 - The bounded DSL prevents injection attacks by design — no arbitrary code execution
+
+## Implementation Order
+
+This ADR should be implemented **after ADR-100** (rendering) and **in parallel with ADR-102** (caching), since both share the metadata tier. The field-type map is a prerequisite for ADR-103 (elicitation) and ADR-104 (batch validation).
 
 ## Alternatives Considered
 

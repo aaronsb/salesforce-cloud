@@ -26,7 +26,7 @@ The core problem: **the agent knows what it wants to accomplish but not how the 
 
 ## Decision
 
-### 1. Field relevance profiles
+### 1. Field relevance profiles (v1 — implement now)
 
 Pre-categorize fields by common intent patterns. When an agent describes what it's trying to do, the server returns only the relevant subset:
 
@@ -49,37 +49,7 @@ The server maintains intent-to-field mappings built from the field-type map (ADR
 
 These profiles are **generated dynamically** from the describe metadata and field-type map — not hardcoded. A custom currency field `Deal_Value__c` automatically appears in `pipeline` intent results. A custom picklist `Region__c` automatically appears in `reporting` intent results.
 
-### 2. Object suggestion from natural language hints
-
-Add a `discover` tool that accepts a loose description and returns ranked object + field suggestions:
-
-```typescript
-{
-  hint: 'deals closing this quarter over 100k',
-  maxSuggestions: 3
-}
-```
-
-The server:
-1. Tokenizes the hint against object labels and field labels (not just API names)
-2. Scores relevance using label matching, field-type alignment, and common patterns
-3. Returns ranked suggestions with ready-to-use field lists:
-
-```markdown
-## Suggestions for "deals closing this quarter over 100k"
-
-1. **Opportunity** (confidence: high)
-   - Filter: `CloseDate = THIS_QUARTER AND Amount > 100000`
-   - Key fields: Name, StageName, Amount, CloseDate, Account.Name, Owner.Name
-   - Custom fields detected: Deal_Size__c (currency), Region__c (picklist)
-
-2. **Deal_Review__c** (confidence: medium)
-   - Custom object with 12 fields, related to Opportunity via lookup
-```
-
-This collapses the 3-step discovery sequence into one call. The agent gets field names, a suggested filter, and even custom field awareness — without ever calling `describe_object` directly.
-
-### 3. Contextual field narrowing on existing tools
+### 2. Contextual field narrowing on existing tools (v1 — implement now)
 
 Extend existing tools with an optional `fields` parameter that accepts either explicit names or an intent tag:
 
@@ -95,18 +65,23 @@ When `intent` is provided, the handler uses the relevance profile to select fiel
 
 This integrates with ADR-100's progressive disclosure — `intent` controls *which* fields, `detail` controls *how much* of each field.
 
-### 4. Schema fingerprinting for org-specific tuning
+### 3. Object suggestion from natural language hints (deferred — v2)
 
-On first connection, the server computes a lightweight schema fingerprint:
+> **Deferred**: This section describes a future enhancement. Implement after v1 patterns are proven.
 
-- Which standard objects have custom fields (indicating active use)
-- Which custom objects exist and their record counts (approximated via recent-record queries)
-- Relationship graph between objects (lookup/master-detail connections)
+A `discover` tool that accepts a loose description and returns ranked object + field suggestions:
 
-This fingerprint is cached (ADR-102 metadata tier) and used to:
-- Rank object suggestions (objects with more custom fields and records score higher)
-- Detect org patterns (e.g., "this org uses Deal_Review__c as the primary pipeline object instead of Opportunity")
-- Avoid suggesting empty or unused objects
+```typescript
+{ hint: 'deals closing this quarter over 100k', maxSuggestions: 3 }
+```
+
+The server tokenizes the hint against object and field labels, scores relevance, and returns ranked suggestions with ready-to-use field lists. This collapses the full discovery sequence into one call but requires non-trivial NL matching logic.
+
+### 4. Schema fingerprinting for org-specific tuning (deferred — v2)
+
+> **Deferred**: This section describes a future enhancement. Implement after v1 patterns are proven.
+
+On first connection, the server computes a lightweight schema fingerprint: which objects have custom fields (indicating active use), which custom objects exist, and the relationship graph between objects. This fingerprint ranks object suggestions and detects org patterns (e.g., "this org uses Deal_Review__c as the primary pipeline object"). Requires async initialization at startup, similar to jira-cloud's field discovery pattern.
 
 ## Consequences
 
@@ -115,26 +90,30 @@ This fingerprint is cached (ADR-102 metadata tier) and used to:
 - Discovery collapses from 3+ tool calls to 1 — massive token and round-trip savings
 - Agents work with curated field sets instead of parsing 200-field describe results
 - Custom fields are surfaced automatically via intent profiles, not manual discovery
-- The `discover` tool provides a natural entry point for agents unfamiliar with the org's schema
-- Schema fingerprinting adapts to each org's actual usage patterns
+- `fields` parameter on existing tools is backwards compatible — omitting preserves current behavior
 
 ### Negative
 
 - Intent profiles are heuristic — they may miss fields relevant to unusual workflows
-- Label-based matching is fuzzy and may produce false positives for ambiguous terms
-- Schema fingerprinting adds first-connection latency (mitigated by async initialization, per jira-cloud's pattern)
-- The `discover` tool's suggestions are only as good as the scoring algorithm
+- Agents can always fall back to `describe_object` for exhaustive field access — elicitation is additive, not replacing
 
 ### Neutral
 
-- Agents can always fall back to `describe_object` for exhaustive field access — elicitation is additive, not replacing
 - Intent profiles evolve naturally as the field-type map (ADR-101) grows
-- The `fields` parameter on existing tools is backwards compatible — omitting it preserves current behavior
-- Schema fingerprinting data is useful beyond elicitation — it feeds object ranking in `list_objects` too
+- The deferred v2 features (discover tool, schema fingerprinting) build on v1's field profiles without requiring v1 changes
+
+## Implementation Order
+
+This ADR should be implemented **last** in the sequence. It depends on:
+- ADR-101's field-type map (for generating intent profiles dynamically)
+- ADR-102's metadata cache (for storing describe results)
+- ADR-100's rendering (for formatting elicitation responses)
+
+Start with v1 (sections 1-2) — field profiles and `fields`/`intent` parameters. Evaluate v2 (sections 3-4) after v1 is in production.
 
 ## Alternatives Considered
 
 - **Pre-built "smart queries"**: Fixed endpoints like `pipeline_summary` that hide schema entirely. Fast to implement but brittle — every new query pattern requires server code. Rejected in favor of composable intent profiles.
 - **Agent-side schema caching**: Let the agent call `describe_object` once and remember the results across turns. Pushes the burden to the agent, wastes its context window on field catalogs, and doesn't help with object selection. Rejected.
-- **LLM-powered field matching inside the server**: Run a small model to match intent to fields. Adds latency, cost, and a dependency on an inference service. Overkill when metadata-based heuristics work well for structured data. Rejected for now, but could be a future enhancement.
+- **LLM-powered field matching inside the server**: Run a small model to match intent to fields. Adds latency, cost, and a dependency on an inference service. Overkill when metadata-based heuristics work well for structured data. Rejected for now, but could be a future enhancement for the deferred v2 `discover` tool.
 - **GraphQL-style field selection**: Let agents specify exact field paths. Powerful but requires agents to already know the schema — doesn't solve the discovery problem. Useful as a complement (the `fields` parameter) but not a replacement for intent-based elicitation.

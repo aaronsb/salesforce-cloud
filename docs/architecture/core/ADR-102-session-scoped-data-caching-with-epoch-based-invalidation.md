@@ -6,6 +6,7 @@ deciders:
 related:
   - ADR-100
   - ADR-101
+  - ADR-104
 ---
 
 # ADR-102: Session-scoped data caching with epoch-based invalidation
@@ -36,7 +37,7 @@ Salesforce provides a natural staleness signal: every record carries `SystemMods
 
 - **Metadata tier** supports ADR-101's field-type computation map. Cached on first access per object, reused for all subsequent analytics and rendering.
 - **Record tier** is the core innovation. Each cached record stores its `SystemModstamp` as the epoch marker.
-- **Query tier** prevents duplicate queries within tight loops but expires quickly — query results go stale faster than individual records.
+- **Query tier** prevents duplicate queries within tight loops but expires quickly (5-15 seconds). Query results have a fundamental staleness gap that record-level epochs cannot solve: `SystemModstamp` detects changes to *known* records but cannot detect *new* records matching a cached query, or records that no longer match after modification. Short TTL is the honest and likely permanent answer. MCP sessions are conversational, not real-time dashboards — the data doesn't change fast enough within a typical interaction to warrant Streaming API or PushTopic complexity. A 10-15 second TTL with `refresh: true` as an escape hatch covers the actual usage pattern.
 
 ### 2. Epoch-based record invalidation
 
