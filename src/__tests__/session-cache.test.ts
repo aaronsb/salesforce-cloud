@@ -271,12 +271,12 @@ describe('SessionCache — Cross-cutting', () => {
   });
 
   it('should evict LRU entries when maxBytes is exceeded', () => {
-    // Each record ≈ ~45 bytes as JSON; set ceiling very low
+    // Each record ≈ 50+ bytes; set ceiling so only 2 fit
     const cache = new SessionCache({ maxBytes: 100, maxRecords: 1000 });
-    cache.setRecord('X', '1', { payload: 'aaa' }, 'e1');
-    cache.setRecord('X', '2', { payload: 'bbb' }, 'e2');
-    cache.setRecord('X', '3', { payload: 'ccc' }, 'e3');
-    cache.setRecord('X', '4', { payload: 'ddd' }, 'e4');
+    const bigPayload = 'x'.repeat(40);
+    cache.setRecord('X', '1', { payload: bigPayload }, 'e1');
+    cache.setRecord('X', '2', { payload: bigPayload }, 'e2');
+    cache.setRecord('X', '3', { payload: bigPayload }, 'e3');
 
     const stats = cache.getStats();
     expect(stats.totalBytes).toBeLessThanOrEqual(100);

@@ -54,6 +54,7 @@ export class SessionCache {
 
   // Stats
   private evictionCount = 0;
+  private accessCounter = 0;
 
   constructor(options: CacheOptions = {}) {
     this.maxRecords    = options.maxRecords    ?? 500;
@@ -75,7 +76,7 @@ export class SessionCache {
       return undefined;
     }
 
-    entry.lastAccessed = Date.now();
+    entry.lastAccessed = ++this.accessCounter;
     return entry.data;
   }
 
@@ -84,7 +85,7 @@ export class SessionCache {
     this.metadata.set(objectName, {
       data,
       size,
-      lastAccessed: Date.now(),
+      lastAccessed: ++this.accessCounter,
       createdAt: Date.now(),
     });
     this.enforceEviction();
@@ -103,7 +104,7 @@ export class SessionCache {
     const entry = this.records.get(key);
     if (!entry || entry.tombstoned) return undefined;
 
-    entry.lastAccessed = Date.now();
+    entry.lastAccessed = ++this.accessCounter;
     return entry.data;
   }
 
@@ -113,7 +114,7 @@ export class SessionCache {
     this.records.set(key, {
       data,
       size,
-      lastAccessed: Date.now(),
+      lastAccessed: ++this.accessCounter,
       createdAt: Date.now(),
       epoch,
       tombstoned: false,
@@ -138,7 +139,7 @@ export class SessionCache {
       this.records.set(key, {
         data: null,
         size: 0,
-        lastAccessed: Date.now(),
+        lastAccessed: ++this.accessCounter,
         createdAt: Date.now(),
         epoch: '',
         tombstoned: true,
@@ -173,7 +174,7 @@ export class SessionCache {
       return undefined;
     }
 
-    entry.lastAccessed = Date.now();
+    entry.lastAccessed = ++this.accessCounter;
     return entry.data;
   }
 
@@ -182,7 +183,7 @@ export class SessionCache {
     this.queries.set(fingerprint, {
       data,
       size,
-      lastAccessed: Date.now(),
+      lastAccessed: ++this.accessCounter,
       createdAt: Date.now(),
     });
     this.enforceEviction();
