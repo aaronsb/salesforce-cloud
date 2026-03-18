@@ -160,10 +160,16 @@ class SalesforceServer {
         }
       } catch (error) {
         console.error('Error handling request:', error);
-        if (error instanceof McpError) {
+        // Only throw MCP protocol errors (invalid params, unknown tool)
+        if (error instanceof McpError && error.code !== ErrorCode.InternalError) {
           throw error;
         }
-        throw new McpError(ErrorCode.InternalError, 'Internal server error');
+        // For Salesforce API errors, return as text content — not MCP errors
+        const message = error instanceof Error ? error.message : String(error);
+        return {
+          content: [{ type: 'text', text: `**Request failed:** ${message}\n\nThis may be due to insufficient API permissions, disabled features, or fields not available on this org.` }],
+          isError: true,
+        };
       }
     });
   }

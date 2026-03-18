@@ -119,7 +119,27 @@ export async function handleGetOpportunityDetails(client: SalesforceClient, args
       `;
     }
 
-    const records = await client.executeQuery(query);
+    let records;
+    try {
+      records = await client.executeQuery(query);
+    } catch (error) {
+      if (!selectFields) {
+        // Full query failed — fall back to safe core fields
+        console.error('Full opportunity query failed, falling back to core fields:', error);
+        const safeQuery = `
+          SELECT Id, Name, Amount, Type, StageName, Probability, CloseDate, Description,
+                 LeadSource, NextStep, ForecastCategory, ExpectedRevenue,
+                 IsClosed, IsWon, LastActivityDate, SystemModstamp,
+                 Account.Name, Account.Industry, Account.Website,
+                 Owner.Name, Owner.Email
+          FROM Opportunity
+          WHERE Id = '${args.opportunityId}'
+        `;
+        records = await client.executeQuery(safeQuery);
+      } else {
+        throw error;
+      }
+    }
 
     if (!records || !records.results || records.results.length === 0) {
       throw new McpError(
