@@ -12,11 +12,15 @@ export class SalesforceClient {
   private initialized = false;
 
   constructor() {
-    this.SF_CLIENT_ID = process.env.SF_CLIENT_ID || '';
-    this.SF_CLIENT_SECRET = process.env.SF_CLIENT_SECRET || '';
-    this.SF_USERNAME = process.env.SF_USERNAME || '';
-    this.SF_PASSWORD = process.env.SF_PASSWORD || '';
-    this.SF_LOGIN_URL = process.env.SF_LOGIN_URL || 'https://login.salesforce.com';
+    // Resolve env vars, treating uninterpolated mcpb template strings as empty
+    const resolve = (val: string | undefined): string =>
+      val && !val.startsWith('${') ? val : '';
+
+    this.SF_CLIENT_ID = resolve(process.env.SF_CLIENT_ID);
+    this.SF_CLIENT_SECRET = resolve(process.env.SF_CLIENT_SECRET);
+    this.SF_USERNAME = resolve(process.env.SF_USERNAME);
+    this.SF_PASSWORD = resolve(process.env.SF_PASSWORD);
+    this.SF_LOGIN_URL = resolve(process.env.SF_LOGIN_URL) || 'https://login.salesforce.com';
 
     this.conn = new jsforce.Connection({
       loginUrl: this.SF_LOGIN_URL,
@@ -38,6 +42,8 @@ export class SalesforceClient {
   async initialize() {
     const hasClientCreds = this.SF_CLIENT_ID && this.SF_CLIENT_SECRET;
     const hasUserCreds = this.SF_USERNAME && this.SF_PASSWORD;
+
+    console.error(`SF auth config: client_id=${this.SF_CLIENT_ID ? this.SF_CLIENT_ID.substring(0, 8) + '...' : '<empty>'}, login_url=${this.SF_LOGIN_URL}, flow=${hasUserCreds ? 'password' : 'client_credentials'}`);
 
     if (!hasClientCreds) {
       throw new Error('Missing required Salesforce environment variables: SF_CLIENT_ID and SF_CLIENT_SECRET');
