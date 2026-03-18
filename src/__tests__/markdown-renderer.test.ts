@@ -458,6 +458,22 @@ describe('formatFieldValue', () => {
     expect(result!.length).toBeLessThan(210);
     expect(result).toMatch(/\.\.\.$/);
   });
+
+  it('should suppress FK ID fields with Salesforce-shaped values', () => {
+    // 18-char SF ID
+    expect(formatFieldValue('CampaignId', '006VW00000MYYgxYAH')).toBeNull();
+    // 15-char SF ID
+    expect(formatFieldValue('ParentId', '006VW00000MYYgx')).toBeNull();
+    // ReportsToId
+    expect(formatFieldValue('ReportsToId', '003ABC000000001AAA')).toBeNull();
+  });
+
+  it('should not suppress Id-suffixed fields with non-SF values', () => {
+    // Short string — not an SF ID
+    expect(formatFieldValue('ExternalId', 'abc123')).toBe('abc123');
+    // Numeric value
+    expect(formatFieldValue('LegacyId', 42)).toBe('42');
+  });
 });
 
 describe('humanizeFieldName', () => {
@@ -475,6 +491,11 @@ describe('humanizeFieldName', () => {
 
   it('should handle combined patterns', () => {
     expect(humanizeFieldName('MyCustomField__c')).toBe('My Custom Field');
+  });
+
+  it('should strip __r relationship suffix', () => {
+    expect(humanizeFieldName('Account__r')).toBe('Account');
+    expect(humanizeFieldName('Custom_Lookup__r')).toBe('Custom Lookup');
   });
 });
 
@@ -562,6 +583,20 @@ describe('renderAccount dynamic projection', () => {
     expect(result).toContain('SLA: Gold');
     expect(result).toContain('Region: EMEA');
   });
+
+  it('should not duplicate fields already in the hardcoded template', () => {
+    const account = {
+      Name: 'Acme Corp',
+      Industry: 'Tech',
+      Phone: '555-1234',
+      Custom__c: 'extra',
+    };
+    const result = renderAccount(account, 'full');
+    const industryMatches = result.match(/Tech/g);
+    expect(industryMatches).toHaveLength(1);
+    const phoneMatches = result.match(/555-1234/g);
+    expect(phoneMatches).toHaveLength(1);
+  });
 });
 
 describe('renderContact dynamic projection', () => {
@@ -576,6 +611,20 @@ describe('renderContact dynamic projection', () => {
     const result = renderContact(contact, 'full');
     expect(result).toContain('Preferred Language: French');
   });
+
+  it('should not duplicate fields already in the hardcoded template', () => {
+    const contact = {
+      Name: 'Alice',
+      Email: 'alice@co.com',
+      Department: 'Engineering',
+      Custom__c: 'extra',
+    };
+    const result = renderContact(contact, 'full');
+    const emailMatches = result.match(/alice@co\.com/g);
+    expect(emailMatches).toHaveLength(1);
+    const deptMatches = result.match(/Engineering/g);
+    expect(deptMatches).toHaveLength(1);
+  });
 });
 
 describe('renderRecord generic with formatFieldValue', () => {
@@ -588,6 +637,30 @@ describe('renderRecord generic with formatFieldValue', () => {
     }, 'full');
     expect(result).toContain('Total Revenue: $250K');
     expect(result).toContain('Active: Yes');
+  });
+
+  it('should silently skip complex nested objects without Name', () => {
+    const result = renderRecord('CustomObj', {
+      Id: '123',
+      Name: 'Thing',
+      BlobField: { data: 'binary', size: 1024 },
+      GoodField: 'visible',
+    }, 'full');
+    expect(result).not.toContain('BlobField');
+    expect(result).not.toContain('binary');
+    expect(result).toContain('Good Field: visible');
+  });
+
+  it('should suppress FK ID fields in full mode', () => {
+    const result = renderRecord('CustomObj', {
+      Id: '123',
+      Name: 'Thing',
+      CampaignId: '701VW00000ABCDeAAB',
+      Custom__c: 'visible',
+    }, 'full');
+    expect(result).not.toContain('CampaignId');
+    expect(result).not.toContain('701VW00000ABCDeAAB');
+    expect(result).toContain('Custom: visible');
   });
 });
 

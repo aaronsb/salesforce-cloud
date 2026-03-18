@@ -122,18 +122,33 @@ function renderPagination(pagination: PaginationInfo): string {
 // Dynamic field projection
 // ============================================================================
 
+/** Salesforce ID pattern — 15 or 18 alphanumeric chars */
+const SF_ID_PATTERN = /^[a-zA-Z0-9]{15}(?:[a-zA-Z0-9]{3})?$/;
+
 /**
  * Format a field value for display based on its name and runtime type.
  *
  * Applies heuristic formatting: field names ending in common suffixes
  * (Date, Revenue, Amount, etc.) get type-appropriate formatting.
  * Falls back to raw value display for unknown fields.
+ *
+ * Note on currency heuristic: numeric fields whose name contains
+ * "revenue", "amount", "price", or "cost" get dollar formatting.
+ * This may false-positive on fields like Cost_Center_Code__c if they
+ * happen to hold a number — an acceptable trade-off vs. missing real
+ * currency fields.
  */
 export function formatFieldValue(key: string, value: unknown): string | null {
   if (value == null) return null;
 
   // Skip Salesforce metadata and nested objects/arrays (handled structurally)
   if (key === 'attributes') return null;
+
+  // Suppress FK ID fields — opaque 18-char IDs are noise in display
+  if (/Id$/.test(key) && typeof value === 'string' && SF_ID_PATTERN.test(value)) {
+    return null;
+  }
+
   if (typeof value === 'object') {
     if (Array.isArray(value)) return `${value.length} items`;
     // Named sub-objects get name extracted
@@ -160,12 +175,12 @@ export function formatFieldValue(key: string, value: unknown): string | null {
 
   // Date/datetime fields — string values with date-related names
   if (typeof value === 'string') {
-    if (lower.includes('date') || lower === 'createdat' || lower === 'lastmodified') {
+    if (lower.includes('date')) {
       return formatDate(value);
     }
     // Long text gets truncated
-    if (String(value).length > 200) {
-      return truncate(stripHtml(String(value)), 200);
+    if (value.length > 200) {
+      return truncate(stripHtml(value), 200);
     }
   }
 
@@ -177,8 +192,8 @@ export function formatFieldValue(key: string, value: unknown): string | null {
  * Strips __c suffix and converts CamelCase/underscores to spaced words.
  */
 export function humanizeFieldName(key: string): string {
-  // Strip __c custom field suffix
-  let name = key.replace(/__c$/, '');
+  // Strip __c (custom field) and __r (relationship) suffixes
+  let name = key.replace(/__[cr]$/, '');
   // Insert spaces before capitals (CamelCase → Camel Case)
   name = name.replace(/([a-z])([A-Z])/g, '$1 $2');
   // Replace underscores with spaces
@@ -205,6 +220,62 @@ export function projectRemainingFields(
 
   return lines;
 }
+
+// ============================================================================
+// Consumed-key sets for typed renderers
+// ============================================================================
+
+/** System/metadata fields suppressed from all typed renderers */
+const SYSTEM_KEYS = [
+  'IsDeleted', 'SystemModstamp', 'CreatedById', 'LastModifiedById',
+  'LastModifiedDate', 'CreatedDate',
+];
+
+/** Fields consumed by renderOpportunity's hardcoded sections */
+const OPPORTUNITY_CONSUMED_KEYS = new Set([
+  // Identity
+  'Id', 'id', 'Name', 'name', 'attributes',
+  // Summary line
+  'StageName', 'stage', 'Amount', 'amount', 'CloseDate', 'close_date',
+  // Detail fields
+  'Probability', 'probability', 'Type', 'type', 'LeadSource', 'lead_source',
+  'ForecastCategory', 'forecast_category', 'ForecastCategoryName',
+  'ExpectedRevenue', 'expected_revenue', 'NextStep', 'next_step',
+  'LastActivityDate', 'last_activity_date', 'IsClosed', 'is_closed', 'IsWon', 'is_won',
+  // Structural sections
+  'Description', 'description',
+  'Account', 'account', 'AccountId',
+  'Owner', 'owner', 'OwnerId',
+  'contacts', 'OpportunityContactRoles',
+  'history', 'Histories',
+  'tasks', 'Tasks',
+  'notes', 'Notes',
+  // System
+  ...SYSTEM_KEYS,
+]);
+
+/** Fields consumed by renderAccount's hardcoded sections */
+const ACCOUNT_CONSUMED_KEYS = new Set([
+  'Id', 'id', 'Name', 'name', 'attributes',
+  'Industry', 'industry', 'Type', 'type', 'Website', 'website',
+  'Phone', 'phone', 'AnnualRevenue', 'annual_revenue',
+  'NumberOfEmployees', 'number_of_employees',
+  'Owner', 'owner', 'OwnerId',
+  'Description', 'description',
+  'BillingAddress', 'billing_address',
+  ...SYSTEM_KEYS,
+]);
+
+/** Fields consumed by renderContact's hardcoded sections */
+const CONTACT_CONSUMED_KEYS = new Set([
+  'Id', 'id', 'Name', 'name', 'FirstName', 'LastName', 'attributes',
+  'Title', 'title', 'Email', 'email', 'Phone', 'phone',
+  'MobilePhone', 'mobile_phone', 'Department', 'department',
+  'Account', 'account', 'AccountId',
+  'Owner', 'owner', 'OwnerId',
+  'Description', 'description',
+  ...SYSTEM_KEYS,
+]);
 
 // ============================================================================
 // Opportunity rendering
@@ -338,29 +409,7 @@ export function renderOpportunity(opp: Record<string, any>, detail: 'summary' | 
 
   // Dynamic field projection — emit any remaining non-null fields
   // that weren't already rendered by the hardcoded sections above
-  const consumedKeys = new Set([
-    // Identity
-    'Id', 'id', 'Name', 'name', 'attributes',
-    // Summary line
-    'StageName', 'stage', 'Amount', 'amount', 'CloseDate', 'close_date',
-    // Detail fields
-    'Probability', 'probability', 'Type', 'type', 'LeadSource', 'lead_source',
-    'ForecastCategory', 'forecast_category', 'ForecastCategoryName',
-    'ExpectedRevenue', 'expected_revenue', 'NextStep', 'next_step',
-    'LastActivityDate', 'last_activity_date', 'IsClosed', 'is_closed', 'IsWon', 'is_won',
-    // Structural sections
-    'Description', 'description',
-    'Account', 'account', 'AccountId',
-    'Owner', 'owner', 'OwnerId',
-    'contacts', 'OpportunityContactRoles',
-    'history', 'Histories',
-    'tasks', 'Tasks',
-    'notes', 'Notes',
-    // System fields not useful in display
-    'IsDeleted', 'SystemModstamp', 'CreatedById', 'LastModifiedById',
-    'LastModifiedDate', 'CreatedDate',
-  ]);
-  const remaining = projectRemainingFields(opp, consumedKeys);
+  const remaining = projectRemainingFields(opp, OPPORTUNITY_CONSUMED_KEYS);
   if (remaining.length > 0) {
     lines.push('');
     lines.push(...remaining);
@@ -423,18 +472,7 @@ export function renderAccount(account: Record<string, any>, detail: 'summary' | 
   }
 
   // Dynamic field projection
-  const consumedKeys = new Set([
-    'Id', 'id', 'Name', 'name', 'attributes',
-    'Industry', 'industry', 'Type', 'type', 'Website', 'website',
-    'Phone', 'phone', 'AnnualRevenue', 'annual_revenue',
-    'NumberOfEmployees', 'number_of_employees',
-    'Owner', 'owner', 'OwnerId',
-    'Description', 'description',
-    'BillingAddress', 'billing_address',
-    'IsDeleted', 'SystemModstamp', 'CreatedById', 'LastModifiedById',
-    'LastModifiedDate', 'CreatedDate',
-  ]);
-  const remaining = projectRemainingFields(account, consumedKeys);
+  const remaining = projectRemainingFields(account, ACCOUNT_CONSUMED_KEYS);
   if (remaining.length > 0) {
     lines.push('');
     lines.push(...remaining);
@@ -494,17 +532,7 @@ export function renderContact(contact: Record<string, any>, detail: 'summary' | 
   }
 
   // Dynamic field projection
-  const consumedKeys = new Set([
-    'Id', 'id', 'Name', 'name', 'FirstName', 'LastName', 'attributes',
-    'Title', 'title', 'Email', 'email', 'Phone', 'phone',
-    'MobilePhone', 'mobile_phone', 'Department', 'department',
-    'Account', 'account', 'AccountId',
-    'Owner', 'owner', 'OwnerId',
-    'Description', 'description',
-    'IsDeleted', 'SystemModstamp', 'CreatedById', 'LastModifiedById',
-    'LastModifiedDate', 'CreatedDate',
-  ]);
-  const remaining = projectRemainingFields(contact, consumedKeys);
+  const remaining = projectRemainingFields(contact, CONTACT_CONSUMED_KEYS);
   if (remaining.length > 0) {
     lines.push('');
     lines.push(...remaining);
