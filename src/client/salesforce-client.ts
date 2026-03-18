@@ -18,16 +18,38 @@ export class SalesforceClient {
     this.SF_LOGIN_URL = process.env.SF_LOGIN_URL || 'https://login.salesforce.com';
 
     this.conn = new jsforce.Connection({
-      loginUrl: this.SF_LOGIN_URL
+      loginUrl: this.SF_LOGIN_URL,
+      oauth2: {
+        clientId: this.SF_CLIENT_ID,
+        clientSecret: this.SF_CLIENT_SECRET,
+        loginUrl: this.SF_LOGIN_URL,
+      },
     });
   }
 
   async initialize() {
-    if (!this.SF_CLIENT_ID || !this.SF_CLIENT_SECRET || !this.SF_USERNAME || !this.SF_PASSWORD) {
-      throw new Error('Missing required Salesforce environment variables');
+    const hasClientCreds = this.SF_CLIENT_ID && this.SF_CLIENT_SECRET;
+    const hasUserCreds = this.SF_USERNAME && this.SF_PASSWORD;
+
+    if (!hasClientCreds) {
+      throw new Error('Missing required Salesforce environment variables: SF_CLIENT_ID and SF_CLIENT_SECRET');
     }
+
     try {
-      await this.conn.login(this.SF_USERNAME, this.SF_PASSWORD);
+      if (hasUserCreds) {
+        // Password flow: client ID + secret + username + password
+        await this.conn.login(this.SF_USERNAME, this.SF_PASSWORD);
+        console.error('Authenticated via password flow');
+      } else {
+        // Client credentials flow: client ID + secret only
+        // Requires My Domain URL (e.g. https://yourcompany.my.salesforce.com)
+        if (this.SF_LOGIN_URL === 'https://login.salesforce.com') {
+          console.error('Warning: Client credentials flow typically requires a My Domain URL, not login.salesforce.com');
+          console.error('Set SF_LOGIN_URL=https://yourcompany.my.salesforce.com');
+        }
+        await this.conn.authorize({ grant_type: 'client_credentials' });
+        console.error('Authenticated via client credentials flow');
+      }
     } catch (error: any) {
       throw new Error(`Salesforce login failed: ${error?.message || 'Unknown error'}`);
     }

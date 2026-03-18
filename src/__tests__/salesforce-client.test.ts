@@ -8,6 +8,7 @@ jest.mock('jsforce', () => {
   return {
     Connection: jest.fn().mockImplementation(() => ({
       login: jest.fn().mockResolvedValue(undefined),
+      authorize: jest.fn().mockResolvedValue(undefined),
       query: jest.fn().mockResolvedValue({
         records: [
           { Id: '001', Name: 'Test Account' }
@@ -50,7 +51,12 @@ describe('SalesforceClient', () => {
     await client.initialize();
     
     expect(jsforce.Connection).toHaveBeenCalledWith({
-      loginUrl: 'https://test.salesforce.com'
+      loginUrl: 'https://test.salesforce.com',
+      oauth2: {
+        clientId: 'test-client-id',
+        clientSecret: 'test-client-secret',
+        loginUrl: 'https://test.salesforce.com',
+      },
     });
   });
 
@@ -82,8 +88,29 @@ describe('SalesforceClient', () => {
 
   it('should throw error when missing required environment variables', async () => {
     process.env.SF_CLIENT_ID = '';
-    
+
     const client = new SalesforceClient();
-    await expect(client.initialize()).rejects.toThrow('Missing required Salesforce environment variables');
+    await expect(client.initialize()).rejects.toThrow('Missing required Salesforce environment variables: SF_CLIENT_ID and SF_CLIENT_SECRET');
+  });
+
+  it('should use client credentials flow when no username/password', async () => {
+    delete process.env.SF_USERNAME;
+    delete process.env.SF_PASSWORD;
+
+    const client = new SalesforceClient();
+    await client.initialize();
+
+    const connInstance = (jsforce.Connection as jest.Mock).mock.results[0].value;
+    expect(connInstance.authorize).toHaveBeenCalledWith({ grant_type: 'client_credentials' });
+    expect(connInstance.login).not.toHaveBeenCalled();
+  });
+
+  it('should use password flow when username/password are provided', async () => {
+    const client = new SalesforceClient();
+    await client.initialize();
+
+    const connInstance = (jsforce.Connection as jest.Mock).mock.results[0].value;
+    expect(connInstance.login).toHaveBeenCalledWith('test@example.com', 'test-password');
+    expect(connInstance.authorize).not.toHaveBeenCalled();
   });
 });

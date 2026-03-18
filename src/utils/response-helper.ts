@@ -5,7 +5,11 @@
  * don't need to know about rendering internals.
  */
 
-import { renderOpportunity, renderList, renderQueryResult, renderRecord } from './markdown-renderer.js';
+import {
+  renderOpportunity, renderList, renderQueryResult, renderRecord,
+  renderConversationAnalysis, renderOpportunityInsights, renderSimilarOpportunities,
+  renderEnrichment, renderBusinessCase, BusinessCaseData,
+} from './markdown-renderer.js';
 import { getNextSteps } from './next-steps.js';
 
 type Detail = 'summary' | 'full';
@@ -66,4 +70,44 @@ export function simpleResponse(
   result?: Record<string, unknown>,
 ) {
   return respond(text, toolName, result);
+}
+
+/** Render conversation analysis */
+export function conversationResponse(
+  result: Record<string, unknown>,
+  toolName: string,
+) {
+  return respond(renderConversationAnalysis(result), toolName, result);
+}
+
+/** Render opportunity insights */
+export function insightsResponse(
+  insights: Record<string, unknown>,
+  toolName: string,
+) {
+  return respond(renderOpportunityInsights(insights), toolName, insights);
+}
+
+/** Render similar opportunities */
+export function similarOpportunitiesResponse(
+  result: Record<string, unknown>,
+  toolName: string,
+) {
+  return respond(renderSimilarOpportunities(result), toolName, result);
+}
+
+/** Render opportunity enrichment */
+export function enrichmentResponse(
+  enrichment: Record<string, unknown>,
+  toolName: string,
+) {
+  return respond(renderEnrichment(enrichment), toolName, enrichment);
+}
+
+/** Render business case */
+export function businessCaseResponse(
+  data: BusinessCaseData,
+  toolName: string,
+) {
+  return respond(renderBusinessCase(data), toolName, data.opportunity as Record<string, unknown>);
 }

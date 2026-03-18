@@ -52,6 +52,28 @@ export function buildFieldList(fields?: string[]): string {
   return fields?.join(', ') || 'Id, Name';
 }
 
+/**
+ * Validate a Salesforce record ID (15 or 18 char alphanumeric).
+ * Throws if invalid — use before interpolating IDs into SOQL.
+ */
+export function validateSalesforceId(id: string, label = 'ID'): string {
+  if (!/^[a-zA-Z0-9]{15,18}$/.test(id)) {
+    throw new Error(`Invalid Salesforce ${label}: "${id}"`);
+  }
+  return id;
+}
+
+/**
+ * Escape a string value for safe use in SOQL WHERE clauses.
+ * Prevents SOQL injection by escaping special characters.
+ */
+export function escapeSoqlString(value: string): string {
+  return value
+    .replace(/\\/g, '\\\\')   // backslashes first
+    .replace(/'/g, "\\'")     // then single quotes
+    .trim();
+}
+
 export function addPaginationToQuery(query: string, pagination?: PaginationParams): string {
   if (!pagination) return query;
 

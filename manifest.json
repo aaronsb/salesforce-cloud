@@ -46,7 +46,9 @@
     { "name": "create_record", "description": "Create a new Salesforce record" },
     { "name": "update_record", "description": "Update an existing Salesforce record" },
     { "name": "delete_record", "description": "Delete a Salesforce record" },
-    { "name": "get_user_info", "description": "Get current Salesforce user information" }
+    { "name": "get_user_info", "description": "Get current Salesforce user information" },
+    { "name": "analyze", "description": "Run analytics on any Salesforce object with field-type-aware grouping and aggregation" },
+    { "name": "batch", "description": "Execute multiple operations in a single call with result references and destructive-operation guardrails" }
   ],
   "tools_generated": false,
   "prompts": [],

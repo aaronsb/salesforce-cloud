@@ -26,11 +26,16 @@ import { handleEnrichOpportunity } from './handlers/enrichment-handlers.js';
 import { handleFindSimilarOpportunities } from './handlers/pattern-handlers.js';
 import { handleOpportunityInsights } from './handlers/insights-handlers.js';
 import { handleAnalyze } from './handlers/analyze-handler.js';
+import { handleBatch } from './handlers/batch-handler.js';
 import { toolSchemas } from './schemas/tool-schemas.js';
+import { SessionCache } from './utils/session-cache.js';
+import { CacheMiddleware } from './utils/cache-middleware.js';
 
 class SalesforceServer {
   private server: Server;
   private sfClient: SalesforceClient;
+  private cache: SessionCache;
+  private cacheMiddleware: CacheMiddleware;
 
   constructor() {
     console.error('Loading tool schemas...');
@@ -55,7 +60,9 @@ class SalesforceServer {
     );
 
     this.sfClient = new SalesforceClient();
-    
+    this.cache = new SessionCache();
+    this.cacheMiddleware = new CacheMiddleware(this.cache);
+
     this.setupHandlers();
     
     this.server.onerror = (error) => console.error('[MCP Error]', error);
@@ -100,23 +107,26 @@ class SalesforceServer {
 
       try {
         switch (name) {
+          case 'batch':
+            return await handleBatch(this.sfClient, request.params.arguments, this.cacheMiddleware);
+
           case 'analyze':
             return await handleAnalyze(this.sfClient, request.params.arguments);
 
           case 'execute_soql':
-            return await handleExecuteSOQL(this.sfClient, request.params.arguments);
+            return await handleExecuteSOQL(this.sfClient, request.params.arguments, this.cache);
 
           case 'describe_object':
-            return await handleDescribeObject(this.sfClient, request.params.arguments);
+            return await handleDescribeObject(this.sfClient, request.params.arguments, this.cacheMiddleware);
 
           case 'create_record':
-            return await handleCreateRecord(this.sfClient, request.params.arguments);
+            return await handleCreateRecord(this.sfClient, request.params.arguments, this.cacheMiddleware);
 
           case 'update_record':
-            return await handleUpdateRecord(this.sfClient, request.params.arguments);
+            return await handleUpdateRecord(this.sfClient, request.params.arguments, this.cacheMiddleware);
 
           case 'delete_record':
-            return await handleDeleteRecord(this.sfClient, request.params.arguments);
+            return await handleDeleteRecord(this.sfClient, request.params.arguments, this.cacheMiddleware);
 
           case 'get_user_info':
             return await handleGetUserInfo(this.sfClient);
@@ -125,35 +135,41 @@ class SalesforceServer {
             return await handleListObjects(this.sfClient, request.params.arguments);
 
           case 'search_opportunities':
-            return await handleSearchOpportunities(this.sfClient, request.params.arguments);
+            return await handleSearchOpportunities(this.sfClient, request.params.arguments, this.cache);
 
           case 'get_opportunity_details':
-            return await handleGetOpportunityDetails(this.sfClient, request.params.arguments);
+            return await handleGetOpportunityDetails(this.sfClient, request.params.arguments, this.cacheMiddleware);
 
           case 'analyze_conversation':
-            return await handleAnalyzeConversation(request.params.arguments, this.sfClient);
+            return await handleAnalyzeConversation(this.sfClient, request.params.arguments);
 
           case 'generate_business_case':
-            return await handleGenerateBusinessCase(request.params.arguments, this.sfClient);
+            return await handleGenerateBusinessCase(this.sfClient, request.params.arguments);
 
           case 'enrich_opportunity':
-            return await handleEnrichOpportunity(request.params.arguments, this.sfClient);
+            return await handleEnrichOpportunity(this.sfClient, request.params.arguments);
 
           case 'find_similar_opportunities':
-            return await handleFindSimilarOpportunities(request.params.arguments, this.sfClient);
+            return await handleFindSimilarOpportunities(this.sfClient, request.params.arguments);
 
           case 'opportunity_insights':
-            return await handleOpportunityInsights(request.params.arguments, this.sfClient);
+            return await handleOpportunityInsights(this.sfClient, request.params.arguments);
 
           default:
             throw new McpError(ErrorCode.MethodNotFound, `Unknown tool: ${name}`);
         }
       } catch (error) {
         console.error('Error handling request:', error);
-        if (error instanceof McpError) {
+        // Only throw MCP protocol errors (invalid params, unknown tool)
+        if (error instanceof McpError && error.code !== ErrorCode.InternalError) {
           throw error;
         }
-        throw new McpError(ErrorCode.InternalError, 'Internal server error');
+        // For Salesforce API errors, return as text content — not MCP errors
+        const message = error instanceof Error ? error.message : String(error);
+        return {
+          content: [{ type: 'text', text: `**Request failed:** ${message}\n\nThis may be due to insufficient API permissions, disabled features, or fields not available on this org.` }],
+          isError: true,
+        };
       }
     });
   }

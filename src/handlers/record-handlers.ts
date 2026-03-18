@@ -1,6 +1,7 @@
 import { McpError, ErrorCode } from '@modelcontextprotocol/sdk/types.js';
 import { SalesforceClient } from '../client/salesforce-client.js';
 import { simpleResponse } from '../utils/response-helper.js';
+import { CacheMiddleware } from '../utils/cache-middleware.js';
 
 interface CreateRecordParams {
   objectName: string;
@@ -48,7 +49,7 @@ function isDeleteRecordParams(obj: any): obj is DeleteRecordParams {
   );
 }
 
-export async function handleCreateRecord(client: SalesforceClient, args: any) {
+export async function handleCreateRecord(client: SalesforceClient, args: any, cacheMiddleware?: CacheMiddleware) {
   if (!isCreateRecordParams(args)) {
     throw new McpError(
       ErrorCode.InvalidParams,
@@ -58,6 +59,10 @@ export async function handleCreateRecord(client: SalesforceClient, args: any) {
 
   const result = await client.createRecord(args.objectName, args.data) as Record<string, any>;
   const id = result?.id || result?.Id || 'unknown';
+
+  // Don't cache input data — Salesforce may add defaults, triggers, workflows.
+  // The next read will fetch the actual server state.
+
   return simpleResponse(
     `Created ${args.objectName} record: ${id}`,
     'create_record',
@@ -65,7 +70,7 @@ export async function handleCreateRecord(client: SalesforceClient, args: any) {
   );
 }
 
-export async function handleUpdateRecord(client: SalesforceClient, args: any) {
+export async function handleUpdateRecord(client: SalesforceClient, args: any, cacheMiddleware?: CacheMiddleware) {
   if (!isUpdateRecordParams(args)) {
     throw new McpError(
       ErrorCode.InvalidParams,
@@ -74,6 +79,11 @@ export async function handleUpdateRecord(client: SalesforceClient, args: any) {
   }
 
   await client.updateRecord(args.objectName, args.recordId, args.data);
+
+  if (cacheMiddleware) {
+    cacheMiddleware.onRecordUpdated(args.objectName, args.recordId);
+  }
+
   return simpleResponse(
     `Updated ${args.objectName} record: ${args.recordId}`,
     'update_record',
@@ -81,7 +91,7 @@ export async function handleUpdateRecord(client: SalesforceClient, args: any) {
   );
 }
 
-export async function handleDeleteRecord(client: SalesforceClient, args: any) {
+export async function handleDeleteRecord(client: SalesforceClient, args: any, cacheMiddleware?: CacheMiddleware) {
   if (!isDeleteRecordParams(args)) {
     throw new McpError(
       ErrorCode.InvalidParams,
@@ -90,6 +100,11 @@ export async function handleDeleteRecord(client: SalesforceClient, args: any) {
   }
 
   await client.deleteRecord(args.objectName, args.recordId);
+
+  if (cacheMiddleware) {
+    cacheMiddleware.onRecordDeleted(args.objectName, args.recordId);
+  }
+
   return simpleResponse(
     `Deleted ${args.objectName} record: ${args.recordId}`,
     'delete_record',

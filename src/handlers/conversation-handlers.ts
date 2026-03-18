@@ -1,6 +1,8 @@
 import { McpError, ErrorCode } from '@modelcontextprotocol/sdk/types.js';
 import { SalesforceClient } from '../client/salesforce-client.js';
 import { ConversationAnalysisResult, ConversationInsights, ConversationAnalysisArgs } from '../types/conversation-types.js';
+import { conversationResponse, simpleResponse } from '../utils/response-helper.js';
+import { validateSalesforceId } from '../utils/index.js';
 
 function isConversationAnalysisArgs(obj: any): obj is ConversationAnalysisArgs {
   return (
@@ -10,9 +12,78 @@ function isConversationAnalysisArgs(obj: any): obj is ConversationAnalysisArgs {
   );
 }
 
+/**
+ * Shared conversation analysis logic — used by both analyze_conversation
+ * and generate_business_case handlers.
+ */
+export async function analyzeConversationInsights(
+  opportunityId: string,
+  sfClient: SalesforceClient,
+): Promise<ConversationInsights> {
+  const validId = validateSalesforceId(opportunityId, 'opportunityId');
+  const tasks = await sfClient.executeQuery(`
+    SELECT Id, Subject, Description, Status, CreatedDate,
+           ActivityDate, Priority, Type, TaskSubtype, WhoId, Who.Name
+    FROM Task
+    WHERE WhatId = '${validId}'
+    ORDER BY CreatedDate DESC
+  `);
+
+  const insights: ConversationInsights = {
+    totalActivities: tasks.results.length,
+    gongCalls: 0,
+    emailExchanges: { inbound: 0, outbound: 0 },
+    lastActivityDate: null,
+    callTopics: [],
+    engagementTrend: 'stable',
+    keyContacts: [],
+    activityTypes: {},
+    recommendations: []
+  };
+
+  const contactsSet = new Set<string>();
+  let recentActivityCount = 0;
+  const thirtyDaysAgo = new Date();
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+  tasks.results.forEach((task: any) => {
+    const createdDate = new Date(task.CreatedDate);
+    if (!insights.lastActivityDate || createdDate > insights.lastActivityDate) {
+      insights.lastActivityDate = createdDate;
+    }
+    if (createdDate > thirtyDaysAgo) recentActivityCount++;
+    if (task.Who?.Name) contactsSet.add(task.Who.Name);
+
+    const activityType = task.Type || 'Other';
+    insights.activityTypes[activityType] = (insights.activityTypes[activityType] || 0) + 1;
+
+    if (task.Subject?.includes('[Gong')) {
+      if (task.Subject.includes('[Gong In]')) {
+        insights.emailExchanges.inbound++;
+      } else if (task.Subject.includes('[Gong Out]')) {
+        insights.emailExchanges.outbound++;
+      } else {
+        insights.gongCalls++;
+        const callTitle = task.Subject.replace(/\[Gong\]?\s*/g, '').trim();
+        if (callTitle && !insights.callTopics.includes(callTitle)) {
+          insights.callTopics.push(callTitle);
+        }
+      }
+    }
+  });
+
+  if (recentActivityCount >= 5) insights.engagementTrend = 'increasing';
+  else if (recentActivityCount <= 1) insights.engagementTrend = 'declining';
+
+  insights.keyContacts = Array.from(contactsSet);
+  generateRecommendations(insights);
+
+  return insights;
+}
+
 export async function handleAnalyzeConversation(
-  args: any,
-  sfClient: SalesforceClient
+  sfClient: SalesforceClient,
+  args: any
 ) {
   if (!isConversationAnalysisArgs(args)) {
     throw new McpError(
@@ -20,86 +91,9 @@ export async function handleAnalyzeConversation(
       'Invalid conversation analysis parameters'
     );
   }
+
   try {
-    // Get all tasks/activities for the opportunity
-    const tasks = await sfClient.executeQuery(`
-      SELECT Id, Subject, Description, Status, CreatedDate, 
-             ActivityDate, Priority, Type, TaskSubtype, WhoId, Who.Name
-      FROM Task 
-      WHERE WhatId = '${args.opportunityId}'
-      ORDER BY CreatedDate DESC
-    `);
-
-    const insights: ConversationInsights = {
-      totalActivities: tasks.results.length,
-      gongCalls: 0,
-      emailExchanges: { inbound: 0, outbound: 0 },
-      lastActivityDate: null,
-      callTopics: [],
-      engagementTrend: 'stable',
-      keyContacts: [],
-      activityTypes: {},
-      recommendations: []
-    };
-
-    const contactsSet = new Set<string>();
-
-    let recentActivityCount = 0;
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-
-    // Analyze each activity
-    tasks.results.forEach((task: any) => {
-      const createdDate = new Date(task.CreatedDate);
-      
-      // Track most recent activity
-      if (!insights.lastActivityDate || createdDate > insights.lastActivityDate) {
-        insights.lastActivityDate = createdDate;
-      }
-
-      // Count recent activities for trend analysis
-      if (createdDate > thirtyDaysAgo) {
-        recentActivityCount++;
-      }
-
-      // Track contact engagement
-      if (task.Who?.Name) {
-        contactsSet.add(task.Who.Name);
-      }
-
-      // Track activity types
-      const activityType = task.Type || 'Other';
-      insights.activityTypes[activityType] = (insights.activityTypes[activityType] || 0) + 1;
-
-      // Analyze Gong activities
-      if (task.Subject?.includes('[Gong')) {
-        if (task.Subject.includes('[Gong In]')) {
-          insights.emailExchanges.inbound++;
-        } else if (task.Subject.includes('[Gong Out]')) {
-          insights.emailExchanges.outbound++;
-        } else {
-          insights.gongCalls++;
-          // Extract call title
-          const callTitle = task.Subject.replace(/\[Gong\]?\s*/g, '').trim();
-          if (callTitle && !insights.callTopics.includes(callTitle)) {
-            insights.callTopics.push(callTitle);
-          }
-        }
-      }
-    });
-
-    // Determine engagement trend
-    if (recentActivityCount >= 5) {
-      insights.engagementTrend = 'increasing';
-    } else if (recentActivityCount <= 1) {
-      insights.engagementTrend = 'declining';
-    }
-
-    // Convert set to array
-    insights.keyContacts = Array.from(contactsSet);
-
-    // Generate recommendations
-    generateRecommendations(insights);
+    const insights = await analyzeConversationInsights(args.opportunityId, sfClient);
 
     const result: ConversationAnalysisResult = {
       success: true,
@@ -108,31 +102,9 @@ export async function handleAnalyzeConversation(
       analysisDate: new Date().toISOString()
     };
 
-    return {
-      content: [
-        {
-          type: 'text',
-          text: JSON.stringify(result, null, 2),
-        },
-      ],
-    };
-
+    return conversationResponse(result as unknown as Record<string, unknown>, 'analyze_conversation');
   } catch (error: any) {
-    const errorResult: ConversationAnalysisResult = {
-      success: false,
-      error: error.message,
-      opportunityId: args.opportunityId,
-      analysisDate: new Date().toISOString()
-    };
-
-    return {
-      content: [
-        {
-          type: 'text',
-          text: JSON.stringify(errorResult, null, 2),
-        },
-      ],
-    };
+    return simpleResponse(`Error: ${error.message}`, 'analyze_conversation');
   }
 }
 

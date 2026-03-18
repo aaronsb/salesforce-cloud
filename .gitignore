@@ -1,4 +1,7 @@
 node_modules/
 build/
 *.log
-.env*
+.env
+.env.*
+!.env.example
+.mcp.json

@@ -19,8 +19,13 @@
  * Format a date string to a compact, readable format.
  * Handles date-only strings (YYYY-MM-DD) without timezone shifting.
  */
-export function formatDate(dateStr: string | null | undefined): string {
+export function formatDate(dateStr: string | Date | null | undefined): string {
   if (!dateStr) return 'Not set';
+  // Handle Date objects directly
+  if (dateStr instanceof Date) {
+    if (isNaN(dateStr.getTime())) return 'Invalid date';
+    return dateStr.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+  }
   const dateOnly = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (dateOnly) {
     const [, y, m, d] = dateOnly;
@@ -108,7 +113,7 @@ function renderPagination(pagination: PaginationInfo): string {
   const total = pagination.totalSize != null ? ` of ${pagination.totalSize}` : '';
   lines.push(`Page ${pagination.currentPage}/${pagination.totalPages}${total}`);
   if (pagination.hasNextPage) {
-    lines.push(`**Next page:** pageNumber=${pagination.currentPage + 1}`);
+    lines.push(`Next page: pageNumber=${pagination.currentPage + 1}`);
   }
   return lines.join('\n');
 }
@@ -139,27 +144,33 @@ export function renderOpportunity(opp: Record<string, any>, detail: 'summary' | 
   if (id) lines.push(`ID: ${id}`);
   lines.push('');
 
-  // Core fields
-  lines.push(`**Stage:** ${formatStatus(opp.StageName || opp.stage)}`);
-  lines.push(`**Amount:** ${formatAmount(opp.Amount ?? opp.amount)}`);
-  if ((opp.Probability ?? opp.probability) != null) lines.push(`**Probability:** ${opp.Probability ?? opp.probability}%`);
-  if (opp.CloseDate || opp.close_date) lines.push(`**Close Date:** ${formatDate(opp.CloseDate || opp.close_date)}`);
-  if (opp.Type || opp.type) lines.push(`**Type:** ${opp.Type || opp.type}`);
-  if (opp.LeadSource || opp.lead_source) lines.push(`**Lead Source:** ${opp.LeadSource || opp.lead_source}`);
-  if (opp.ForecastCategory || opp.forecast_category) lines.push(`**Forecast:** ${opp.ForecastCategory || opp.forecast_category}`);
-  if ((opp.ExpectedRevenue ?? opp.expected_revenue) != null) lines.push(`**Expected Revenue:** ${formatAmount(opp.ExpectedRevenue ?? opp.expected_revenue)}`);
-  if (opp.NextStep || opp.next_step) lines.push(`**Next Step:** ${opp.NextStep || opp.next_step}`);
-  if (opp.LastActivityDate || opp.last_activity_date) lines.push(`**Last Activity:** ${formatDate(opp.LastActivityDate || opp.last_activity_date)}`);
+  // Core metadata — pipe-delimited summary line
+  const metaParts = [
+    formatStatus(opp.StageName || opp.stage),
+    formatAmount(opp.Amount ?? opp.amount),
+    opp.Owner?.Name || opp.owner?.name || null,
+    (opp.CloseDate || opp.close_date) ? formatDate(opp.CloseDate || opp.close_date) : null,
+  ].filter(Boolean);
+  lines.push(metaParts.join(' | '));
+
+  // Detail fields
+  if ((opp.Probability ?? opp.probability) != null) lines.push(`Probability: ${opp.Probability ?? opp.probability}%`);
+  if (opp.Type || opp.type) lines.push(`Type: ${opp.Type || opp.type}`);
+  if (opp.LeadSource || opp.lead_source) lines.push(`Lead Source: ${opp.LeadSource || opp.lead_source}`);
+  if (opp.ForecastCategory || opp.forecast_category) lines.push(`Forecast: ${opp.ForecastCategory || opp.forecast_category}`);
+  if ((opp.ExpectedRevenue ?? opp.expected_revenue) != null) lines.push(`Expected Revenue: ${formatAmount(opp.ExpectedRevenue ?? opp.expected_revenue)}`);
+  if (opp.NextStep || opp.next_step) lines.push(`Next Step: ${opp.NextStep || opp.next_step}`);
+  if (opp.LastActivityDate || opp.last_activity_date) lines.push(`Last Activity: ${formatDate(opp.LastActivityDate || opp.last_activity_date)}`);
 
   const isClosed = opp.IsClosed ?? opp.is_closed;
   const isWon = opp.IsWon ?? opp.is_won;
-  if (isClosed != null) lines.push(`**Closed:** ${isClosed ? 'Yes' : 'No'} | **Won:** ${isWon ? 'Yes' : 'No'}`);
+  if (isClosed != null) lines.push(`Closed: ${isClosed ? 'Yes' : 'No'} | Won: ${isWon ? 'Yes' : 'No'}`);
 
   // Description
   const desc = opp.Description || opp.description;
   if (desc) {
     lines.push('');
-    lines.push('## Description');
+    lines.push('Description:');
     lines.push(truncate(stripHtml(desc), 500));
   }
 
@@ -167,27 +178,24 @@ export function renderOpportunity(opp: Record<string, any>, detail: 'summary' | 
   const account = opp.Account || opp.account;
   if (account) {
     lines.push('');
-    lines.push('## Account');
     const accParts = [account.Name || account.name];
     if (account.Industry || account.industry) accParts.push(account.Industry || account.industry);
     if (account.Website || account.website) accParts.push(account.Website || account.website);
-    lines.push(accParts.filter(Boolean).join(' | '));
+    lines.push(`Account: ${accParts.filter(Boolean).join(' | ')}`);
   }
 
   // Owner
   const owner = opp.Owner || opp.owner;
   if (owner) {
-    lines.push('');
-    lines.push('## Owner');
     const ownerParts = [owner.Name || owner.name, owner.Email || owner.email].filter(Boolean);
-    lines.push(ownerParts.join(' | '));
+    lines.push(`Owner: ${ownerParts.join(' | ')}`);
   }
 
   // Contacts
   const contacts = opp.contacts || opp.OpportunityContactRoles?.records;
   if (contacts && contacts.length > 0) {
     lines.push('');
-    lines.push(`## Contacts (${contacts.length})`);
+    lines.push(`Contacts (${contacts.length}):`);
     for (const c of contacts) {
       const cName = c.name || c.Contact?.Name || 'Unknown';
       const cEmail = c.email || c.Contact?.Email || '';
@@ -200,7 +208,7 @@ export function renderOpportunity(opp: Record<string, any>, detail: 'summary' | 
   const history = opp.history || opp.Histories?.records;
   if (history && history.length > 0) {
     lines.push('');
-    lines.push(`## History (${history.length})`);
+    lines.push(`History (${history.length}):`);
     const recent = history.slice(0, 10);
     for (const h of recent) {
       const date = formatDate(h.date || h.CreatedDate);
@@ -216,7 +224,7 @@ export function renderOpportunity(opp: Record<string, any>, detail: 'summary' | 
   const tasks = opp.tasks || opp.Tasks?.records;
   if (tasks && tasks.length > 0) {
     lines.push('');
-    lines.push(`## Tasks (${tasks.length})`);
+    lines.push(`Tasks (${tasks.length}):`);
     const recent = tasks.slice(0, 5);
     for (const t of recent) {
       const subject = t.subject || t.Subject;
@@ -231,13 +239,13 @@ export function renderOpportunity(opp: Record<string, any>, detail: 'summary' | 
   const notes = opp.notes || opp.Notes?.records;
   if (notes && notes.length > 0) {
     lines.push('');
-    lines.push(`## Notes (${notes.length})`);
+    lines.push(`Notes (${notes.length}):`);
     const recent = notes.slice(0, 5);
     for (const n of recent) {
       const title = n.title || n.Title;
       const body = n.body || n.Body;
       const createdBy = n.created_by || n.CreatedBy?.Name || '';
-      lines.push(`- **${title}**${createdBy ? ` (${createdBy})` : ''}: ${truncate(stripHtml(body), 100)}`);
+      lines.push(`- ${title}${createdBy ? ` (${createdBy})` : ''}: ${truncate(stripHtml(body), 100)}`);
     }
     if (notes.length > 5) lines.push(`  +${notes.length - 5} more notes`);
   }
@@ -266,29 +274,34 @@ export function renderAccount(account: Record<string, any>, detail: 'summary' | 
   if (account.Id || account.id) lines.push(`ID: ${account.Id || account.id}`);
   lines.push('');
 
-  if (account.Industry || account.industry) lines.push(`**Industry:** ${account.Industry || account.industry}`);
-  if (account.Type || account.type) lines.push(`**Type:** ${account.Type || account.type}`);
-  if (account.Website || account.website) lines.push(`**Website:** ${account.Website || account.website}`);
-  if (account.Phone || account.phone) lines.push(`**Phone:** ${account.Phone || account.phone}`);
-  if (account.AnnualRevenue ?? account.annual_revenue) lines.push(`**Annual Revenue:** ${formatAmount(account.AnnualRevenue ?? account.annual_revenue)}`);
-  if (account.NumberOfEmployees ?? account.number_of_employees) lines.push(`**Employees:** ${account.NumberOfEmployees ?? account.number_of_employees}`);
+  // Pipe-delimited metadata
+  const accMeta = [
+    account.Industry || account.industry,
+    account.Type || account.type,
+    account.Website || account.website,
+  ].filter(Boolean);
+  if (accMeta.length > 0) lines.push(accMeta.join(' | '));
+
+  if (account.Phone || account.phone) lines.push(`Phone: ${account.Phone || account.phone}`);
+  if (account.AnnualRevenue ?? account.annual_revenue) lines.push(`Annual Revenue: ${formatAmount(account.AnnualRevenue ?? account.annual_revenue)}`);
+  if (account.NumberOfEmployees ?? account.number_of_employees) lines.push(`Employees: ${account.NumberOfEmployees ?? account.number_of_employees}`);
 
   const owner = account.Owner || account.owner;
   if (owner) {
-    lines.push(`**Owner:** ${owner.Name || owner.name || 'Unknown'}`);
+    lines.push(`Owner: ${owner.Name || owner.name || 'Unknown'}`);
   }
 
   const desc = account.Description || account.description;
   if (desc) {
     lines.push('');
-    lines.push('## Description');
+    lines.push('Description:');
     lines.push(truncate(stripHtml(desc), 500));
   }
 
   const address = account.BillingAddress || account.billing_address;
   if (address) {
     lines.push('');
-    lines.push('## Billing Address');
+    lines.push('Billing Address:');
     const addrParts = [address.street, address.city, address.state, address.postalCode, address.country].filter(Boolean);
     lines.push(addrParts.join(', '));
   }
@@ -318,26 +331,31 @@ export function renderContact(contact: Record<string, any>, detail: 'summary' | 
   if (contact.Id || contact.id) lines.push(`ID: ${contact.Id || contact.id}`);
   lines.push('');
 
-  if (contact.Title || contact.title) lines.push(`**Title:** ${contact.Title || contact.title}`);
-  if (contact.Email || contact.email) lines.push(`**Email:** ${contact.Email || contact.email}`);
-  if (contact.Phone || contact.phone) lines.push(`**Phone:** ${contact.Phone || contact.phone}`);
-  if (contact.MobilePhone || contact.mobile_phone) lines.push(`**Mobile:** ${contact.MobilePhone || contact.mobile_phone}`);
-  if (contact.Department || contact.department) lines.push(`**Department:** ${contact.Department || contact.department}`);
+  // Pipe-delimited metadata
+  const contactMeta = [
+    contact.Title || contact.title,
+    contact.Email || contact.email,
+    contact.Phone || contact.phone,
+  ].filter(Boolean);
+  if (contactMeta.length > 0) lines.push(contactMeta.join(' | '));
+
+  if (contact.MobilePhone || contact.mobile_phone) lines.push(`Mobile: ${contact.MobilePhone || contact.mobile_phone}`);
+  if (contact.Department || contact.department) lines.push(`Department: ${contact.Department || contact.department}`);
 
   const account = contact.Account || contact.account;
   if (account) {
-    lines.push(`**Account:** ${account.Name || account.name || 'Unknown'}`);
+    lines.push(`Account: ${account.Name || account.name || 'Unknown'}`);
   }
 
   const owner = contact.Owner || contact.owner;
   if (owner) {
-    lines.push(`**Owner:** ${owner.Name || owner.name || 'Unknown'}`);
+    lines.push(`Owner: ${owner.Name || owner.name || 'Unknown'}`);
   }
 
   const desc = contact.Description || contact.description;
   if (desc) {
     lines.push('');
-    lines.push('## Description');
+    lines.push('Description:');
     lines.push(truncate(stripHtml(desc), 500));
   }
 
@@ -376,14 +394,13 @@ export function renderRecord(objectName: string, record: Record<string, any>, de
     if (value == null) continue;
     if (key === 'attributes') continue; // Salesforce metadata field
     if (typeof value === 'object') {
-      // Nested object — render inline
       if (Array.isArray(value)) {
-        lines.push(`**${key}:** ${value.length} items`);
+        lines.push(`${key}: ${value.length} items`);
       } else if (value.Name || value.name) {
-        lines.push(`**${key}:** ${value.Name || value.name}`);
+        lines.push(`${key}: ${value.Name || value.name}`);
       }
     } else {
-      lines.push(`**${key}:** ${value}`);
+      lines.push(`${key}: ${value}`);
     }
   }
 
@@ -485,8 +502,30 @@ export function renderQueryResult(
 }
 
 // ============================================================================
+// Re-export analytics renderers from split file
+// ============================================================================
+
+export {
+  renderConversationAnalysis,
+  renderOpportunityInsights,
+  renderSimilarOpportunities,
+  renderEnrichment,
+  renderBusinessCase,
+} from './markdown-analytics-renderer.js';
+
+export type { BusinessCaseData } from './markdown-analytics-renderer.js';
+
+// ============================================================================
 // Export convenience object
 // ============================================================================
+
+import {
+  renderConversationAnalysis,
+  renderOpportunityInsights,
+  renderSimilarOpportunities,
+  renderEnrichment,
+  renderBusinessCase,
+} from './markdown-analytics-renderer.js';
 
 export const MarkdownRenderer = {
   renderOpportunity,
@@ -495,6 +534,11 @@ export const MarkdownRenderer = {
   renderRecord,
   renderList,
   renderQueryResult,
+  renderConversationAnalysis,
+  renderOpportunityInsights,
+  renderSimilarOpportunities,
+  renderEnrichment,
+  renderBusinessCase,
   helpers: {
     formatStatus,
     truncate,
