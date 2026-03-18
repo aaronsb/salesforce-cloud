@@ -7,7 +7,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/aaronsb/salesforce-cloud.git"
+    "url": "git+https://github.com/aaronsb/salesforce-cloud.git"
   },
   "homepage": "https://github.com/aaronsb/salesforce-cloud#readme",
   "keywords": [
@@ -22,7 +22,7 @@
     "node": ">=20"
   },
   "bin": {
-    "salesforce-cloud": "./build/index.js"
+    "salesforce-cloud": "build/index.js"
   },
   "files": [
     "build",
