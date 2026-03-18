@@ -26,11 +26,16 @@ import { handleEnrichOpportunity } from './handlers/enrichment-handlers.js';
 import { handleFindSimilarOpportunities } from './handlers/pattern-handlers.js';
 import { handleOpportunityInsights } from './handlers/insights-handlers.js';
 import { handleAnalyze } from './handlers/analyze-handler.js';
+import { handleBatch } from './handlers/batch-handler.js';
 import { toolSchemas } from './schemas/tool-schemas.js';
+import { SessionCache } from './utils/session-cache.js';
+import { CacheMiddleware } from './utils/cache-middleware.js';
 
 class SalesforceServer {
   private server: Server;
   private sfClient: SalesforceClient;
+  private cache: SessionCache;
+  private cacheMiddleware: CacheMiddleware;
 
   constructor() {
     console.error('Loading tool schemas...');
@@ -55,7 +60,9 @@ class SalesforceServer {
     );
 
     this.sfClient = new SalesforceClient();
-    
+    this.cache = new SessionCache();
+    this.cacheMiddleware = new CacheMiddleware(this.cache);
+
     this.setupHandlers();
     
     this.server.onerror = (error) => console.error('[MCP Error]', error);
@@ -100,23 +107,26 @@ class SalesforceServer {
 
       try {
         switch (name) {
+          case 'batch':
+            return await handleBatch(this.sfClient, request.params.arguments, this.cacheMiddleware);
+
           case 'analyze':
             return await handleAnalyze(this.sfClient, request.params.arguments);
 
           case 'execute_soql':
-            return await handleExecuteSOQL(this.sfClient, request.params.arguments);
+            return await handleExecuteSOQL(this.sfClient, request.params.arguments, this.cache);
 
           case 'describe_object':
-            return await handleDescribeObject(this.sfClient, request.params.arguments);
+            return await handleDescribeObject(this.sfClient, request.params.arguments, this.cacheMiddleware);
 
           case 'create_record':
-            return await handleCreateRecord(this.sfClient, request.params.arguments);
+            return await handleCreateRecord(this.sfClient, request.params.arguments, this.cacheMiddleware);
 
           case 'update_record':
-            return await handleUpdateRecord(this.sfClient, request.params.arguments);
+            return await handleUpdateRecord(this.sfClient, request.params.arguments, this.cacheMiddleware);
 
           case 'delete_record':
-            return await handleDeleteRecord(this.sfClient, request.params.arguments);
+            return await handleDeleteRecord(this.sfClient, request.params.arguments, this.cacheMiddleware);
 
           case 'get_user_info':
             return await handleGetUserInfo(this.sfClient);
@@ -125,10 +135,10 @@ class SalesforceServer {
             return await handleListObjects(this.sfClient, request.params.arguments);
 
           case 'search_opportunities':
-            return await handleSearchOpportunities(this.sfClient, request.params.arguments);
+            return await handleSearchOpportunities(this.sfClient, request.params.arguments, this.cache);
 
           case 'get_opportunity_details':
-            return await handleGetOpportunityDetails(this.sfClient, request.params.arguments);
+            return await handleGetOpportunityDetails(this.sfClient, request.params.arguments, this.cacheMiddleware);
 
           case 'analyze_conversation':
             return await handleAnalyzeConversation(request.params.arguments, this.sfClient);

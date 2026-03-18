@@ -2,10 +2,16 @@ import { McpError, ErrorCode } from '@modelcontextprotocol/sdk/types.js';
 import { SalesforceClient } from '../client/salesforce-client.js';
 import { PaginationParams } from '../types/index.js';
 import { opportunityResponse, listResponse } from '../utils/response-helper.js';
+import { CacheMiddleware } from '../utils/cache-middleware.js';
+import { SessionCache } from '../utils/session-cache.js';
+import { Intent, getFieldsForIntent, getDefaultFields } from '../utils/field-profiles.js';
+import { buildFieldTypeMap } from '../utils/field-type-map.js';
 
 interface GetOpportunityDetailsParams {
   opportunityId: string;
   detail?: 'summary' | 'full';
+  intent?: Intent;
+  fields?: string[];
 }
 
 function isGetOpportunityDetailsParams(obj: any): obj is GetOpportunityDetailsParams {
@@ -57,7 +63,7 @@ function buildNameMatchCondition(field: string, pattern: string): string {
   return `(${field} LIKE '% ${sanitizedPattern}%' OR ${field} LIKE '${sanitizedPattern}%')`;
 }
 
-export async function handleGetOpportunityDetails(client: SalesforceClient, args: any) {
+export async function handleGetOpportunityDetails(client: SalesforceClient, args: any, cacheMiddleware?: CacheMiddleware) {
   if (!isGetOpportunityDetailsParams(args)) {
     throw new McpError(
       ErrorCode.InvalidParams,
@@ -65,38 +71,74 @@ export async function handleGetOpportunityDetails(client: SalesforceClient, args
     );
   }
 
-  const query = `
-    SELECT Id, Name, Amount, Type, StageName, Probability, CloseDate, Description,
-           LeadSource, NextStep, ForecastCategory, ExpectedRevenue, TotalOpportunityQuantity,
-           HasOpportunityLineItem, IsClosed, IsWon, LastActivityDate,
-           Account.Name, Account.Industry, Account.Website,
-           Owner.Name, Owner.Email,
-           (SELECT Id, ContactId, Contact.Name, Contact.Email, Role
-            FROM OpportunityContactRoles),
-           (SELECT Id, CreatedDate, Field, OldValue, NewValue
-            FROM Histories ORDER BY CreatedDate DESC),
-           (SELECT Id, Title, Body, CreatedDate, CreatedBy.Name
-            FROM Notes ORDER BY CreatedDate DESC),
-           (SELECT Id, Subject, Status, Priority, CreatedDate
-            FROM Tasks ORDER BY CreatedDate DESC)
-    FROM Opportunity
-    WHERE Id = '${args.opportunityId}'
-  `;
+  // Determine which fields to SELECT
+  let selectFields: string[] | null = null;
 
-  const records = await client.executeQuery(query);
-
-  if (!records || !records.results || records.results.length === 0) {
-    throw new McpError(
-      ErrorCode.InvalidRequest,
-      `Opportunity with ID ${args.opportunityId} not found`
-    );
+  if (args.fields && args.fields.length > 0) {
+    // Explicit fields override everything
+    selectFields = [...new Set(['Id', 'SystemModstamp', ...args.fields])];
+  } else if (args.intent) {
+    // Intent-driven field selection — need describe metadata for field type map
+    try {
+      const describeResult = cacheMiddleware
+        ? await cacheMiddleware.getCachedMetadata('Opportunity', () =>
+            client.describeObject('Opportunity', true) as Promise<unknown>)
+        : await client.describeObject('Opportunity', true);
+      const fieldTypeMap = buildFieldTypeMap(describeResult as { fields?: Array<{ name: string; type: string }> });
+      selectFields = [...new Set(['Id', 'SystemModstamp', ...getFieldsForIntent(args.intent, fieldTypeMap)])];
+    } catch {
+      // Fall back to defaults if describe fails
+      selectFields = [...new Set(['Id', 'SystemModstamp', ...getDefaultFields('Opportunity')])];
+    }
   }
 
-  const opportunity = records.results[0] as Record<string, unknown>;
+  const fetcher = async () => {
+    let query: string;
+
+    if (selectFields) {
+      // Focused query — no subqueries to keep it lightweight
+      query = `SELECT ${selectFields.join(', ')} FROM Opportunity WHERE Id = '${args.opportunityId}'`;
+    } else {
+      // Full query with subqueries (original behavior)
+      query = `
+        SELECT Id, Name, Amount, Type, StageName, Probability, CloseDate, Description,
+               LeadSource, NextStep, ForecastCategory, ExpectedRevenue, TotalOpportunityQuantity,
+               HasOpportunityLineItem, IsClosed, IsWon, LastActivityDate, SystemModstamp,
+               Account.Name, Account.Industry, Account.Website,
+               Owner.Name, Owner.Email,
+               (SELECT Id, ContactId, Contact.Name, Contact.Email, Role
+                FROM OpportunityContactRoles),
+               (SELECT Id, CreatedDate, Field, OldValue, NewValue
+                FROM Histories ORDER BY CreatedDate DESC),
+               (SELECT Id, Title, Body, CreatedDate, CreatedBy.Name
+                FROM Notes ORDER BY CreatedDate DESC),
+               (SELECT Id, Subject, Status, Priority, CreatedDate
+                FROM Tasks ORDER BY CreatedDate DESC)
+        FROM Opportunity
+        WHERE Id = '${args.opportunityId}'
+      `;
+    }
+
+    const records = await client.executeQuery(query);
+
+    if (!records || !records.results || records.results.length === 0) {
+      throw new McpError(
+        ErrorCode.InvalidRequest,
+        `Opportunity with ID ${args.opportunityId} not found`
+      );
+    }
+
+    return records.results[0] as Record<string, unknown>;
+  };
+
+  const opportunity = cacheMiddleware
+    ? await cacheMiddleware.getOrFetch('Opportunity', args.opportunityId, fetcher)
+    : await fetcher();
+
   return opportunityResponse(opportunity, 'get_opportunity_details', args.detail || 'full');
 }
 
-export async function handleSearchOpportunities(client: SalesforceClient, args: any) {
+export async function handleSearchOpportunities(client: SalesforceClient, args: any, cache?: SessionCache) {
   if (!isSearchOpportunitiesParams(args)) {
     throw new McpError(
       ErrorCode.InvalidParams,
@@ -131,10 +173,37 @@ export async function handleSearchOpportunities(client: SalesforceClient, args: 
 
   query += ' ORDER BY CloseDate DESC, Amount DESC NULLS LAST';
 
-  const records = await client.executeQuery(query, {
-    pageSize: args.pageSize || 25,
-    pageNumber: args.pageNumber || 1
-  });
+  const pageSize = args.pageSize || 25;
+  const pageNumber = args.pageNumber || 1;
+  const fingerprint = `search_opportunities:${query}:${pageSize}:${pageNumber}`;
+
+  // Check query cache first
+  if (cache) {
+    const cached = cache.getQuery(fingerprint) as Record<string, unknown> | undefined;
+    if (cached) {
+      const results = (cached.results || []) as Record<string, unknown>[];
+      return listResponse(
+        'Opportunity',
+        results,
+        {
+          currentPage: (cached.pageNumber as number) || 1,
+          totalPages: (cached.totalPages as number) || 1,
+          hasNextPage: ((cached.pageNumber as number) || 1) < ((cached.totalPages as number) || 1),
+          hasPreviousPage: ((cached.pageNumber as number) || 1) > 1,
+          totalSize: cached.totalCount as number,
+        },
+        'search_opportunities',
+        args.detail || 'summary',
+      );
+    }
+  }
+
+  const records = await client.executeQuery(query, { pageSize, pageNumber });
+
+  // Store in query cache
+  if (cache) {
+    cache.setQuery(fingerprint, records);
+  }
 
   const results = (records.results || []) as Record<string, unknown>[];
   return listResponse(

@@ -2,19 +2,23 @@ import { McpError, ErrorCode } from '@modelcontextprotocol/sdk/types.js';
 import { SalesforceClient } from '../client/salesforce-client.js';
 import { PaginationParams } from '../types/index.js';
 import { simpleResponse } from '../utils/response-helper.js';
+import { CacheMiddleware } from '../utils/cache-middleware.js';
+import { Intent, getFieldsForIntent } from '../utils/field-profiles.js';
+import { buildFieldTypeMap } from '../utils/field-type-map.js';
 
 interface DescribeObjectParams {
   objectName: string;
   includeFields?: boolean;
   pageSize?: number;
   pageNumber?: number;
+  intent?: Intent;
 }
 
 function isDescribeObjectParams(obj: any): obj is DescribeObjectParams {
   return typeof obj === 'object' && obj !== null && typeof obj.objectName === 'string';
 }
 
-export async function handleDescribeObject(client: SalesforceClient, args: any) {
+export async function handleDescribeObject(client: SalesforceClient, args: any, cacheMiddleware?: CacheMiddleware) {
   if (!isDescribeObjectParams(args)) {
     throw new McpError(
       ErrorCode.InvalidParams,
@@ -27,11 +31,15 @@ export async function handleDescribeObject(client: SalesforceClient, args: any) 
     pageNumber: args.pageNumber
   };
 
-  const metadata = await client.describeObject(
+  const fetcher = () => client.describeObject(
     args.objectName,
     args.includeFields,
     pagination
-  ) as unknown as Record<string, unknown>;
+  ) as Promise<unknown>;
+
+  const metadata = (cacheMiddleware
+    ? await cacheMiddleware.getCachedMetadata(args.objectName, fetcher)
+    : await fetcher()) as Record<string, unknown>;
 
   // Render describe results as structured markdown
   const lines: string[] = [`# ${args.objectName}`];
@@ -40,10 +48,19 @@ export async function handleDescribeObject(client: SalesforceClient, args: any) 
   if (metadata.keyPrefix) lines.push(`**Key Prefix:** ${metadata.keyPrefix}`);
   if (metadata.recordCount != null) lines.push(`**Records:** ${metadata.recordCount}`);
 
-  const fields = metadata.fields as Array<Record<string, unknown>> | undefined;
+  let fields = metadata.fields as Array<Record<string, unknown>> | undefined;
+
+  // Filter fields by intent if provided
+  if (fields && fields.length > 0 && args.intent) {
+    const fieldTypeMap = buildFieldTypeMap(metadata as { fields?: Array<{ name: string; type: string }> });
+    const relevantFieldNames = new Set(getFieldsForIntent(args.intent, fieldTypeMap));
+    fields = fields.filter(f => relevantFieldNames.has(f.name as string));
+  }
+
   if (fields && fields.length > 0) {
+    const intentLabel = args.intent ? ` — ${args.intent} intent` : '';
     lines.push('');
-    lines.push(`## Fields (${fields.length})`);
+    lines.push(`## Fields (${fields.length}${intentLabel})`);
     lines.push('Name | Type | Label');
     lines.push('--- | --- | ---');
     for (const f of fields) {

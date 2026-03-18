@@ -1,4 +1,46 @@
 export const toolSchemas = {
+  batch: {
+    name: 'batch',
+    description: 'Execute multiple operations in a single call with result references. Use $N.field to reference prior results (e.g., $0.id for the ID from operation 0). Destructive operations require confirm: true.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        operations: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              tool: {
+                type: 'string',
+                description: 'Tool name to execute (e.g., create_record, update_record, execute_soql)',
+              },
+              args: {
+                type: 'object',
+                description: 'Arguments for the tool. Use $N.field to reference results from earlier operations.',
+              },
+              confirm: {
+                type: 'boolean',
+                description: 'Required for delete operations. Set to true to confirm destructive action.',
+              },
+            },
+            required: ['tool', 'args'],
+          },
+          description: 'List of operations to execute sequentially (max 16)',
+        },
+        onError: {
+          type: 'string',
+          enum: ['bail', 'continue'],
+          description: 'Error handling: bail (default) stops on first failure, continue executes remaining',
+        },
+        detail: {
+          type: 'string',
+          enum: ['summary', 'full'],
+          description: 'Response detail level (default: summary)',
+        },
+      },
+      required: ['operations'],
+    },
+  },
   analyze: {
     name: 'analyze',
     description: 'Run analytics on any Salesforce object — group by categorical fields, aggregate numeric fields, and compute custom expressions. Uses field-type metadata for validation.',

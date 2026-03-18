@@ -28,6 +28,7 @@ export interface OperationResult {
   tool: string;
   status: 'success' | 'error' | 'skipped';
   text: string;
+  data?: Record<string, unknown>;
 }
 
 // ---------------------------------------------------------------------------
@@ -49,7 +50,7 @@ export function resolveRefs(value: string, results: OperationResult[]): string {
     if (result.status !== 'success') {
       throw new Error(`Reference $${index}.${field}: operation ${index} ${result.status}.`);
     }
-    const extracted = extractField(result.text, field);
+    const extracted = extractField(result.text, field, result.data);
     if (!extracted) {
       throw new Error(`Reference $${index}.${field}: field "${field}" not found in result.`);
     }
@@ -58,16 +59,29 @@ export function resolveRefs(value: string, results: OperationResult[]): string {
 }
 
 /**
- * Extract a field value from an operation result text.
- * Supports: id, key, recordId, objectName, success
+ * Extract a field value from an operation result.
+ * Prefers structured data when available, falls back to text regex.
+ * Supports: id, key, recordId, objectName, success, and any key in data.
  */
-function extractField(text: string, field: string): string | undefined {
-  // Try to find patterns like "record: <id>" or "Created <type> record: <id>"
+function extractField(text: string, field: string, data?: Record<string, unknown>): string | undefined {
+  // Prefer structured data
+  if (data) {
+    const value = data[field];
+    if (value !== undefined && value !== null) return String(value);
+
+    // Common aliases
+    if ((field === 'id' || field === 'recordId') && (data.id || data.Id || data.recordId)) {
+      return String(data.id ?? data.Id ?? data.recordId);
+    }
+    if (field === 'objectName' && data.objectName) {
+      return String(data.objectName);
+    }
+  }
+
+  // Fallback to regex on rendered text
   if (field === 'id' || field === 'recordId') {
-    // Match Salesforce-style IDs (15 or 18 char alphanumeric)
     const idMatch = text.match(/:\s*([a-zA-Z0-9]{15,18})\b/);
     if (idMatch) return idMatch[1];
-    // Fallback: any word after "record:"
     const fallback = text.match(/record:\s*(\S+)/);
     if (fallback) return fallback[1];
   }
