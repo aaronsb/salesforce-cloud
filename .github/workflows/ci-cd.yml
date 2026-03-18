@@ -29,11 +29,6 @@ jobs:
 
       - name: Run tests
         run: npm test
-        env:
-          SF_CLIENT_ID: ${{ secrets.TEST_SF_CLIENT_ID }}
-          SF_CLIENT_SECRET: ${{ secrets.TEST_SF_CLIENT_SECRET }}
-          SF_USERNAME: ${{ secrets.TEST_SF_USERNAME }}
-          SF_PASSWORD: ${{ secrets.TEST_SF_PASSWORD }}
 
       - name: Build
         run: npm run build
