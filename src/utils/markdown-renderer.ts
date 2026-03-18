@@ -119,10 +119,167 @@ function renderPagination(pagination: PaginationInfo): string {
 }
 
 // ============================================================================
-// Opportunity rendering
+// Dynamic field projection
 // ============================================================================
 
- 
+/** Salesforce ID pattern — 15 or 18 alphanumeric chars */
+const SF_ID_PATTERN = /^[a-zA-Z0-9]{15}(?:[a-zA-Z0-9]{3})?$/;
+
+/**
+ * Format a field value for display based on its name and runtime type.
+ *
+ * Applies heuristic formatting: field names ending in common suffixes
+ * (Date, Revenue, Amount, etc.) get type-appropriate formatting.
+ * Falls back to raw value display for unknown fields.
+ *
+ * Note on currency heuristic: numeric fields whose name contains
+ * "revenue", "amount", "price", or "cost" get dollar formatting.
+ * This may false-positive on fields like Cost_Center_Code__c if they
+ * happen to hold a number — an acceptable trade-off vs. missing real
+ * currency fields.
+ */
+export function formatFieldValue(key: string, value: unknown): string | null {
+  if (value == null) return null;
+
+  // Skip Salesforce metadata and nested objects/arrays (handled structurally)
+  if (key === 'attributes') return null;
+
+  // Suppress FK ID fields — opaque 18-char IDs are noise in display
+  if (/Id$/.test(key) && typeof value === 'string' && SF_ID_PATTERN.test(value)) {
+    return null;
+  }
+
+  if (typeof value === 'object') {
+    if (Array.isArray(value)) return `${value.length} items`;
+    // Named sub-objects get name extracted
+    const obj = value as Record<string, any>;
+    if (obj.Name || obj.name) return obj.Name || obj.name;
+    return null; // skip complex nested objects
+  }
+
+  const lower = key.toLowerCase();
+
+  // Boolean fields
+  if (typeof value === 'boolean') return value ? 'Yes' : 'No';
+
+  // Currency fields — numeric with money-related names
+  if (typeof value === 'number') {
+    if (lower.includes('revenue') || lower.includes('amount') || lower.includes('price') || lower.includes('cost')) {
+      return formatAmount(value);
+    }
+    if (lower.includes('percent') || lower.includes('probability')) {
+      return `${value}%`;
+    }
+    return String(value);
+  }
+
+  // Date/datetime fields — string values with date-related names
+  if (typeof value === 'string') {
+    if (lower.includes('date')) {
+      return formatDate(value);
+    }
+    // Long text gets truncated
+    if (value.length > 200) {
+      return truncate(stripHtml(value), 200);
+    }
+  }
+
+  return String(value);
+}
+
+/**
+ * Pretty-print a Salesforce API field name for display.
+ * Strips __c suffix and converts CamelCase/underscores to spaced words.
+ */
+export function humanizeFieldName(key: string): string {
+  // Strip __c (custom field) and __r (relationship) suffixes
+  let name = key.replace(/__[cr]$/, '');
+  // Insert spaces before capitals (CamelCase → Camel Case)
+  name = name.replace(/([a-z])([A-Z])/g, '$1 $2');
+  // Replace underscores with spaces
+  name = name.replace(/_/g, ' ');
+  return name.trim();
+}
+
+/**
+ * Project all non-null fields from a record that aren't in the consumed set.
+ * Returns formatted lines ready to append to rendered output.
+ */
+export function projectRemainingFields(
+  record: Record<string, any>,
+  consumedKeys: Set<string>,
+): string[] {
+  const lines: string[] = [];
+
+  for (const [key, value] of Object.entries(record)) {
+    if (consumedKeys.has(key)) continue;
+    const formatted = formatFieldValue(key, value);
+    if (formatted == null) continue;
+    lines.push(`${humanizeFieldName(key)}: ${formatted}`);
+  }
+
+  return lines;
+}
+
+// ============================================================================
+// Consumed-key sets for typed renderers
+// ============================================================================
+
+/** System/metadata fields suppressed from all typed renderers */
+const SYSTEM_KEYS = [
+  'IsDeleted', 'SystemModstamp', 'CreatedById', 'LastModifiedById',
+  'LastModifiedDate', 'CreatedDate',
+];
+
+/** Fields consumed by renderOpportunity's hardcoded sections */
+const OPPORTUNITY_CONSUMED_KEYS = new Set([
+  // Identity
+  'Id', 'id', 'Name', 'name', 'attributes',
+  // Summary line
+  'StageName', 'stage', 'Amount', 'amount', 'CloseDate', 'close_date',
+  // Detail fields
+  'Probability', 'probability', 'Type', 'type', 'LeadSource', 'lead_source',
+  'ForecastCategory', 'forecast_category', 'ForecastCategoryName',
+  'ExpectedRevenue', 'expected_revenue', 'NextStep', 'next_step',
+  'LastActivityDate', 'last_activity_date', 'IsClosed', 'is_closed', 'IsWon', 'is_won',
+  // Structural sections
+  'Description', 'description',
+  'Account', 'account', 'AccountId',
+  'Owner', 'owner', 'OwnerId',
+  'contacts', 'OpportunityContactRoles',
+  'history', 'Histories',
+  'tasks', 'Tasks',
+  'notes', 'Notes',
+  // System
+  ...SYSTEM_KEYS,
+]);
+
+/** Fields consumed by renderAccount's hardcoded sections */
+const ACCOUNT_CONSUMED_KEYS = new Set([
+  'Id', 'id', 'Name', 'name', 'attributes',
+  'Industry', 'industry', 'Type', 'type', 'Website', 'website',
+  'Phone', 'phone', 'AnnualRevenue', 'annual_revenue',
+  'NumberOfEmployees', 'number_of_employees',
+  'Owner', 'owner', 'OwnerId',
+  'Description', 'description',
+  'BillingAddress', 'billing_address',
+  ...SYSTEM_KEYS,
+]);
+
+/** Fields consumed by renderContact's hardcoded sections */
+const CONTACT_CONSUMED_KEYS = new Set([
+  'Id', 'id', 'Name', 'name', 'FirstName', 'LastName', 'attributes',
+  'Title', 'title', 'Email', 'email', 'Phone', 'phone',
+  'MobilePhone', 'mobile_phone', 'Department', 'department',
+  'Account', 'account', 'AccountId',
+  'Owner', 'owner', 'OwnerId',
+  'Description', 'description',
+  ...SYSTEM_KEYS,
+]);
+
+// ============================================================================
+// Opportunity rendering
+// ============================================================================
 
 export function renderOpportunity(opp: Record<string, any>, detail: 'summary' | 'full' = 'summary'): string {
   if (detail === 'summary') {
@@ -250,6 +407,14 @@ export function renderOpportunity(opp: Record<string, any>, detail: 'summary' | 
     if (notes.length > 5) lines.push(`  +${notes.length - 5} more notes`);
   }
 
+  // Dynamic field projection — emit any remaining non-null fields
+  // that weren't already rendered by the hardcoded sections above
+  const remaining = projectRemainingFields(opp, OPPORTUNITY_CONSUMED_KEYS);
+  if (remaining.length > 0) {
+    lines.push('');
+    lines.push(...remaining);
+  }
+
   return lines.join('\n');
 }
 
@@ -306,6 +471,13 @@ export function renderAccount(account: Record<string, any>, detail: 'summary' | 
     lines.push(addrParts.join(', '));
   }
 
+  // Dynamic field projection
+  const remaining = projectRemainingFields(account, ACCOUNT_CONSUMED_KEYS);
+  if (remaining.length > 0) {
+    lines.push('');
+    lines.push(...remaining);
+  }
+
   return lines.join('\n');
 }
 
@@ -359,6 +531,13 @@ export function renderContact(contact: Record<string, any>, detail: 'summary' | 
     lines.push(truncate(stripHtml(desc), 500));
   }
 
+  // Dynamic field projection
+  const remaining = projectRemainingFields(contact, CONTACT_CONSUMED_KEYS);
+  if (remaining.length > 0) {
+    lines.push('');
+    lines.push(...remaining);
+  }
+
   return lines.join('\n');
 }
 
@@ -383,26 +562,16 @@ export function renderRecord(objectName: string, record: Record<string, any>, de
     return parts.join(' | ');
   }
 
-  // Full rendering: enumerate all non-null fields
+  // Full rendering: enumerate all non-null fields with type-aware formatting
   const lines: string[] = [];
   const name = record.Name || record.name || objectName;
   lines.push(`# ${objectName}: ${name}`);
   if (record.Id || record.id) lines.push(`ID: ${record.Id || record.id}`);
   lines.push('');
 
-  for (const [key, value] of Object.entries(record)) {
-    if (value == null) continue;
-    if (key === 'attributes') continue; // Salesforce metadata field
-    if (typeof value === 'object') {
-      if (Array.isArray(value)) {
-        lines.push(`${key}: ${value.length} items`);
-      } else if (value.Name || value.name) {
-        lines.push(`${key}: ${value.Name || value.name}`);
-      }
-    } else {
-      lines.push(`${key}: ${value}`);
-    }
-  }
+  const consumedKeys = new Set(['Id', 'id', 'Name', 'name', 'attributes']);
+  const remaining = projectRemainingFields(record, consumedKeys);
+  lines.push(...remaining);
 
   return lines.join('\n');
 }
