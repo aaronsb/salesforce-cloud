@@ -19,8 +19,13 @@
  * Format a date string to a compact, readable format.
  * Handles date-only strings (YYYY-MM-DD) without timezone shifting.
  */
-export function formatDate(dateStr: string | null | undefined): string {
+export function formatDate(dateStr: string | Date | null | undefined): string {
   if (!dateStr) return 'Not set';
+  // Handle Date objects directly
+  if (dateStr instanceof Date) {
+    if (isNaN(dateStr.getTime())) return 'Invalid date';
+    return dateStr.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+  }
   const dateOnly = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (dateOnly) {
     const [, y, m, d] = dateOnly;
