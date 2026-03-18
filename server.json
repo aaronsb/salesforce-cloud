@@ -1,0 +1,53 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.aaronsb/salesforce-cloud",
+  "description": "MCP server for Salesforce CRM — manage opportunities, accounts, contacts, SOQL queries, and analytics",
+  "title": "Salesforce Cloud",
+  "websiteUrl": "https://github.com/aaronsb/salesforce-cloud#readme",
+  "repository": {
+    "url": "https://github.com/aaronsb/salesforce-cloud",
+    "source": "github"
+  },
+  "version": "0.2.0",
+  "packages": [
+    {
+      "registryType": "npm",
+      "registryBaseUrl": "https://registry.npmjs.org",
+      "identifier": "@aaronsb/salesforce-cloud-mcp",
+      "version": "0.2.0",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "SF_CLIENT_ID",
+          "description": "Salesforce Connected App client ID",
+          "isRequired": true,
+          "isSecret": true
+        },
+        {
+          "name": "SF_CLIENT_SECRET",
+          "description": "Salesforce Connected App client secret",
+          "isRequired": true,
+          "isSecret": true
+        },
+        {
+          "name": "SF_USERNAME",
+          "description": "Salesforce username (if set, uses password flow; otherwise client credentials flow)",
+          "isRequired": false
+        },
+        {
+          "name": "SF_PASSWORD",
+          "description": "Salesforce password (required with SF_USERNAME for password flow)",
+          "isRequired": false,
+          "isSecret": true
+        },
+        {
+          "name": "SF_LOGIN_URL",
+          "description": "Salesforce login URL (e.g., https://company.my.salesforce.com). Defaults to https://login.salesforce.com",
+          "isRequired": false
+        }
+      ]
+    }
+  ]
+}

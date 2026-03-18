@@ -1,0 +1,8 @@
+**/*.md
+**/*.txt
+**/LICENSE
+**/LICENSE.*
+**/CHANGELOG*
+**/HISTORY*
+**/*.map
+**/.github/

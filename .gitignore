@@ -5,3 +5,6 @@ build/
 .env.*
 !.env.example
 .mcp.json
+*.mcpb
+*.tgz
+mcpb/server/
