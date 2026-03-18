@@ -1,34 +1,107 @@
-.PHONY: build test lint lint-fix clean publish pack inspect watch check help
+.PHONY: build test lint fix clean check inspect watch help
+.PHONY: version-sync release-patch release-minor release-major publish-all mcpb
 
-help: ## Show available targets
-	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-12s\033[0m %s\n", $$1, $$2}'
+VERSION = $(shell node -p 'require("./package.json").version')
 
-build: ## Compile TypeScript
+build:          ## Build TypeScript
 	npm run build
 
-test: ## Run test suite
+test:           ## Run tests
 	npm test
 
-lint: ## Check code quality
+test-watch:     ## Run tests in watch mode
+	npx jest --watch
+
+lint:           ## Run linter
 	npm run lint
 
-lint-fix: ## Auto-fix lint issues
+fix:            ## Run linter with auto-fix
 	npm run lint:fix
 
-clean: ## Remove build artifacts
-	rm -rf build/ *.tgz
+check: lint test build  ## Lint, test, and build (CI gate)
+	@echo "All checks passed"
 
-inspect: ## Launch MCP inspector
+clean:          ## Remove build output
+	rm -rf build *.tgz *.mcpb
+
+inspect:        ## Launch MCP Inspector
 	npm run inspector
 
-pack: build ## Create npm tarball
-	npm pack
-
-publish: build lint test ## Publish to npm
-	npm publish
-
-watch: ## Watch mode for development
+watch:          ## Watch mode for development
 	npm run watch
 
-check: lint test build ## Verify everything before shipping
-	@echo "All checks passed"
+# ── Version & Release ───────────────────────────────────────────────────
+
+version-sync:   ## Sync version from package.json to server.json and manifests
+	@echo "Syncing version $(VERSION) to server.json, manifest.json, mcpb/manifest.json"
+	node scripts/version-sync.cjs
+
+release-patch: check  ## Bump patch, sync, commit, tag, push
+	@echo "Current version: $(VERSION)"
+	npm version patch --no-git-tag-version
+	$(MAKE) version-sync
+	$(MAKE) _release-commit
+
+release-minor: check  ## Bump minor, sync, commit, tag, push
+	@echo "Current version: $(VERSION)"
+	npm version minor --no-git-tag-version
+	$(MAKE) version-sync
+	$(MAKE) _release-commit
+
+release-major: check  ## Bump major, sync, commit, tag, push
+	@echo "Current version: $(VERSION)"
+	npm version major --no-git-tag-version
+	$(MAKE) version-sync
+	$(MAKE) _release-commit
+
+_release-commit:
+	$(eval NEW_VERSION := $(shell node -p 'require("./package.json").version'))
+	git add package.json package-lock.json server.json manifest.json mcpb/manifest.json
+	git commit -m "chore: release v$(NEW_VERSION)"
+	git tag -a "v$(NEW_VERSION)" -m "v$(NEW_VERSION)"
+	git push && git push --tags
+	@echo ""
+	@echo "Released v$(NEW_VERSION). Run 'make publish-all' to publish everywhere."
+
+# ── Publishing ──────────────────────────────────────────────────────────
+
+mcpb: build     ## Build .mcpb desktop extension bundle
+	rm -rf mcpb/server mcpb/package-lock.json
+	mkdir -p mcpb/server
+	cp -r build/* mcpb/server/
+	cp package.json mcpb/server/package.json
+	cd mcpb/server && npm install --production --ignore-scripts --silent
+	rm -f mcpb/server/package.json mcpb/server/package-lock.json
+	mcpb pack mcpb salesforce-cloud-mcp.mcpb
+	@echo ""
+	@echo "Built: salesforce-cloud-mcp.mcpb ($$(du -h salesforce-cloud-mcp.mcpb | cut -f1))"
+
+publish-all: mcpb  ## Publish to npm, MCP Registry, GitHub Release, and build MCPB
+	@echo ""
+	@echo "Publishing v$(VERSION) to all channels."
+	@echo "  1. npm (requires OTP)"
+	@echo "  2. MCP Registry (requires GitHub auth)"
+	@echo "  3. GitHub Release"
+	@echo "  4. MCPB bundle (already built)"
+	@echo ""
+	@read -p "Continue? [y/N] " confirm && [ "$$confirm" = "y" ] || (echo "Aborted." && exit 1)
+	@echo ""
+	@echo "── npm ──"
+	@read -p "npm OTP: " otp && npm publish --access public --otp "$$otp"
+	@echo ""
+	@echo "── MCP Registry ──"
+	mcp-publisher login github
+	mcp-publisher publish server.json
+	@echo ""
+	@echo "── GitHub Release ──"
+	@read -p "Release notes (one line, or empty for default): " notes; \
+	if [ -z "$$notes" ]; then notes="Release v$(VERSION)"; fi; \
+	gh release create "v$(VERSION)" --title "v$(VERSION)" --notes "$$notes" salesforce-cloud-mcp.mcpb
+	@echo ""
+	@echo "v$(VERSION) published to all channels."
+	@echo "MCPB bundle: salesforce-cloud-mcp.mcpb"
+
+help:           ## Show this help
+	@grep -E '^[a-z_-]+:.*##' $(MAKEFILE_LIST) | awk -F ':.*## ' '{printf "  %-16s %s\n", $$1, $$2}'
+
+.DEFAULT_GOAL := help

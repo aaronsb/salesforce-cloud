@@ -1,36 +1,34 @@
 {
   "manifest_version": "0.3",
-  "name": "salesforce-cloud",
+  "name": "salesforce-cloud-mcp",
   "display_name": "Salesforce Cloud",
   "version": "0.2.0",
-  "description": "A Model Context Protocol server for Salesforce CRM integration",
+  "description": "MCP server for Salesforce CRM — manage opportunities, accounts, contacts, SOQL queries, and analytics",
   "author": {
     "name": "aaronsb",
     "url": "https://github.com/aaronsb"
   },
-  "license": "MIT",
-  "homepage": "https://github.com/aaronsb/salesforce-cloud",
-  "documentation": "https://github.com/aaronsb/salesforce-cloud#readme",
-  "support": "https://github.com/aaronsb/salesforce-cloud/issues",
   "repository": {
     "type": "git",
     "url": "https://github.com/aaronsb/salesforce-cloud.git"
   },
+  "homepage": "https://github.com/aaronsb/salesforce-cloud#readme",
+  "support": "https://github.com/aaronsb/salesforce-cloud/issues",
+  "license": "MIT",
   "keywords": [
     "salesforce",
     "crm",
-    "mcp",
-    "ai",
     "opportunities",
-    "soql"
+    "soql",
+    "mcp"
   ],
   "server": {
     "type": "node",
-    "entry_point": "build/index.js",
+    "entry_point": "server/index.js",
     "mcp_config": {
       "command": "node",
       "args": [
-        "${__dirname}/build/index.js"
+        "${__dirname}/server/index.js"
       ],
       "env": {
         "SF_CLIENT_ID": "${user_config.sf_client_id}",
@@ -100,16 +98,13 @@
     },
     {
       "name": "analyze",
-      "description": "Run analytics on any Salesforce object with field-type-aware grouping and aggregation"
+      "description": "Run analytics on any Salesforce object"
     },
     {
       "name": "batch",
-      "description": "Execute multiple operations in a single call with result references and destructive-operation guardrails"
+      "description": "Execute multiple operations in a single call"
     }
   ],
-  "tools_generated": false,
-  "prompts": [],
-  "prompts_generated": false,
   "user_config": {
     "sf_client_id": {
       "type": "string",
@@ -148,9 +143,6 @@
       "darwin",
       "win32",
       "linux"
-    ],
-    "node": {
-      "minimum_version": ">=20.0.0"
-    }
+    ]
   }
 }
