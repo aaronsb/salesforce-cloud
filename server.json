@@ -44,8 +44,8 @@
         },
         {
           "name": "SF_LOGIN_URL",
-          "description": "Salesforce login URL (e.g., https://company.my.salesforce.com). Defaults to https://login.salesforce.com",
-          "isRequired": false
+          "description": "Your Salesforce My Domain URL (e.g., https://company.my.salesforce.com)",
+          "isRequired": true
         }
       ]
     }

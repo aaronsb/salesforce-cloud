@@ -60,7 +60,16 @@ export class SalesforceClient {
       }
       this.initialized = true;
     } catch (error: any) {
-      throw new Error(`Salesforce login failed: ${error?.message || 'Unknown error'}`);
+      const detail = error?.message || 'Unknown error';
+      const flow = hasUserCreds ? 'password' : 'client_credentials';
+      console.error(`Auth failed (${flow} flow, login URL: ${this.SF_LOGIN_URL}): ${detail}`);
+      if (error?.errorCode) console.error(`Salesforce error code: ${error.errorCode}`);
+      throw new Error(
+        `Salesforce login failed (${flow} flow): ${detail}` +
+        (flow === 'client_credentials' && this.SF_LOGIN_URL === 'https://login.salesforce.com'
+          ? '. Client credentials flow requires SF_LOGIN_URL set to your My Domain (e.g. https://company.my.salesforce.com)'
+          : '')
+      );
     }
   }
 
