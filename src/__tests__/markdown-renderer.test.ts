@@ -6,6 +6,9 @@ import {
   truncate,
   stripHtml,
   formatAmount,
+  formatFieldValue,
+  humanizeFieldName,
+  projectRemainingFields,
   renderOpportunity,
   renderAccount,
   renderContact,
@@ -394,6 +397,197 @@ describe('renderQueryResult', () => {
       total_pages: 1,
     });
     expect(result).toContain('Found 1 record');
+  });
+});
+
+// ============================================================================
+// Dynamic field projection tests
+// ============================================================================
+
+describe('formatFieldValue', () => {
+  it('should return null for null/undefined values', () => {
+    expect(formatFieldValue('anything', null)).toBeNull();
+    expect(formatFieldValue('anything', undefined)).toBeNull();
+  });
+
+  it('should skip the attributes key', () => {
+    expect(formatFieldValue('attributes', { type: 'Opportunity' })).toBeNull();
+  });
+
+  it('should format booleans as Yes/No', () => {
+    expect(formatFieldValue('IsActive', true)).toBe('Yes');
+    expect(formatFieldValue('IsActive', false)).toBe('No');
+  });
+
+  it('should format currency fields using formatAmount', () => {
+    expect(formatFieldValue('Services_Revenue__c', 50000)).toBe('$50K');
+    expect(formatFieldValue('Total_Amount', 1500000)).toBe('$1.5M');
+  });
+
+  it('should format percent fields with % suffix', () => {
+    expect(formatFieldValue('Win_Probability__c', 75)).toBe('75%');
+  });
+
+  it('should format date-named string fields using formatDate', () => {
+    expect(formatFieldValue('LastModifiedDate', '2026-03-15')).toBe('Mar 15, 2026');
+  });
+
+  it('should pass through plain numbers', () => {
+    expect(formatFieldValue('NumberOfEmployees', 500)).toBe('500');
+  });
+
+  it('should pass through plain strings', () => {
+    expect(formatFieldValue('Channel_Partner__c', 'Acme')).toBe('Acme');
+  });
+
+  it('should extract Name from nested objects', () => {
+    expect(formatFieldValue('Account', { Name: 'Acme Corp' })).toBe('Acme Corp');
+  });
+
+  it('should return item count for arrays', () => {
+    expect(formatFieldValue('Tags', ['a', 'b', 'c'])).toBe('3 items');
+  });
+
+  it('should return null for complex nested objects without Name', () => {
+    expect(formatFieldValue('SomeBlob', { foo: 'bar' })).toBeNull();
+  });
+
+  it('should truncate long string values', () => {
+    const longText = 'x'.repeat(300);
+    const result = formatFieldValue('Notes__c', longText);
+    expect(result!.length).toBeLessThan(210);
+    expect(result).toMatch(/\.\.\.$/);
+  });
+});
+
+describe('humanizeFieldName', () => {
+  it('should strip __c suffix', () => {
+    expect(humanizeFieldName('Services_Revenue__c')).toBe('Services Revenue');
+  });
+
+  it('should split CamelCase', () => {
+    expect(humanizeFieldName('LastModifiedDate')).toBe('Last Modified Date');
+  });
+
+  it('should replace underscores with spaces', () => {
+    expect(humanizeFieldName('Channel_Partner')).toBe('Channel Partner');
+  });
+
+  it('should handle combined patterns', () => {
+    expect(humanizeFieldName('MyCustomField__c')).toBe('My Custom Field');
+  });
+});
+
+describe('projectRemainingFields', () => {
+  it('should emit fields not in consumed set', () => {
+    const record = { Id: '001', Name: 'Test', Custom__c: 'value', Other: 42 };
+    const consumed = new Set(['Id', 'Name']);
+    const result = projectRemainingFields(record, consumed);
+    expect(result).toContain('Custom: value');
+    expect(result).toContain('Other: 42');
+  });
+
+  it('should skip null values', () => {
+    const record = { Id: '001', Empty__c: null, Filled__c: 'yes' };
+    const consumed = new Set(['Id']);
+    const result = projectRemainingFields(record, consumed);
+    expect(result).toHaveLength(1);
+    expect(result[0]).toContain('Filled: yes');
+  });
+
+  it('should return empty array when all fields are consumed', () => {
+    const record = { Id: '001', Name: 'Test' };
+    const consumed = new Set(['Id', 'Name']);
+    expect(projectRemainingFields(record, consumed)).toHaveLength(0);
+  });
+});
+
+describe('renderOpportunity dynamic projection', () => {
+  it('should include custom __c fields in full rendering', () => {
+    const opp = {
+      Name: 'Test Deal',
+      Id: '006ABC',
+      StageName: 'Proposal',
+      Amount: 100000,
+      Owner: { Name: 'Jane' },
+      CloseDate: '2026-06-15',
+      Services_Revenue__c: 75000,
+      Channel_Partner__c: 'Atlassian',
+      Interest__c: 'Jira;Confluence',
+    };
+    const result = renderOpportunity(opp, 'full');
+    expect(result).toContain('Services Revenue: $75K');
+    expect(result).toContain('Channel Partner: Atlassian');
+    expect(result).toContain('Interest: Jira;Confluence');
+  });
+
+  it('should not duplicate fields already in the hardcoded template', () => {
+    const opp = {
+      Name: 'Test Deal',
+      StageName: 'Proposal',
+      Amount: 100000,
+      Probability: 50,
+      Custom__c: 'extra',
+    };
+    const result = renderOpportunity(opp, 'full');
+    // Probability should appear once (from hardcoded section), not twice
+    const probMatches = result.match(/Probability/g);
+    expect(probMatches).toHaveLength(1);
+  });
+
+  it('should not show null custom fields', () => {
+    const opp = {
+      Name: 'Test Deal',
+      StageName: 'Proposal',
+      Amount: 100000,
+      Services_Revenue__c: null,
+      Channel_Partner__c: null,
+    };
+    const result = renderOpportunity(opp, 'full');
+    expect(result).not.toContain('Services Revenue');
+    expect(result).not.toContain('Channel Partner');
+  });
+});
+
+describe('renderAccount dynamic projection', () => {
+  it('should include custom fields in full rendering', () => {
+    const account = {
+      Name: 'Acme Corp',
+      Id: '001ABC',
+      Industry: 'Tech',
+      SLA__c: 'Gold',
+      Region__c: 'EMEA',
+    };
+    const result = renderAccount(account, 'full');
+    expect(result).toContain('SLA: Gold');
+    expect(result).toContain('Region: EMEA');
+  });
+});
+
+describe('renderContact dynamic projection', () => {
+  it('should include custom fields in full rendering', () => {
+    const contact = {
+      Name: 'Alice',
+      Id: '003ABC',
+      Title: 'VP',
+      Email: 'alice@co.com',
+      Preferred_Language__c: 'French',
+    };
+    const result = renderContact(contact, 'full');
+    expect(result).toContain('Preferred Language: French');
+  });
+});
+
+describe('renderRecord generic with formatFieldValue', () => {
+  it('should format currency-named fields in full mode', () => {
+    const result = renderRecord('CustomObj', {
+      Id: '123',
+      Name: 'Thing',
+      Total_Revenue__c: 250000,
+      Active__c: true,
+    }, 'full');
+    expect(result).toContain('Total Revenue: $250K');
+    expect(result).toContain('Active: Yes');
   });
 });
 
