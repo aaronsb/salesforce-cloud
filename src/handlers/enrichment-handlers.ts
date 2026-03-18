@@ -1,5 +1,6 @@
 import { McpError, ErrorCode } from '@modelcontextprotocol/sdk/types.js';
 import { SalesforceClient } from '../client/salesforce-client.js';
+import { enrichmentResponse, simpleResponse } from '../utils/response-helper.js';
 
 interface EnrichOpportunityArgs {
   opportunityId: string;
@@ -125,31 +126,10 @@ export async function handleEnrichOpportunity(
       enrichmentDate: new Date().toISOString()
     };
 
-    return {
-      content: [
-        {
-          type: 'text',
-          text: JSON.stringify(enrichment, null, 2),
-        },
-      ],
-    };
+    return enrichmentResponse(enrichment, 'enrich_opportunity');
 
   } catch (error: any) {
-    const errorResult = {
-      success: false,
-      error: error.message,
-      opportunityId: args.opportunityId,
-      enrichmentDate: new Date().toISOString()
-    };
-
-    return {
-      content: [
-        {
-          type: 'text',
-          text: JSON.stringify(errorResult, null, 2),
-        },
-      ],
-    };
+    return simpleResponse(`Error: ${error.message}`, 'enrich_opportunity');
   }
 }
 

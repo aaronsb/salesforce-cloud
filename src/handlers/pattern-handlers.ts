@@ -1,5 +1,6 @@
 import { McpError, ErrorCode } from '@modelcontextprotocol/sdk/types.js';
 import { SalesforceClient } from '../client/salesforce-client.js';
+import { similarOpportunitiesResponse, simpleResponse } from '../utils/response-helper.js';
 
 interface FindSimilarOpportunitiesArgs {
   referenceOpportunityId?: string;
@@ -93,30 +94,10 @@ export async function handleFindSimilarOpportunities(
       searchDate: new Date().toISOString()
     };
 
-    return {
-      content: [
-        {
-          type: 'text',
-          text: JSON.stringify(response, null, 2),
-        },
-      ],
-    };
+    return similarOpportunitiesResponse(response, 'find_similar_opportunities');
 
   } catch (error: any) {
-    const errorResult = {
-      success: false,
-      error: error.message,
-      searchDate: new Date().toISOString()
-    };
-
-    return {
-      content: [
-        {
-          type: 'text',
-          text: JSON.stringify(errorResult, null, 2),
-        },
-      ],
-    };
+    return simpleResponse(`Error: ${error.message}`, 'find_similar_opportunities');
   }
 }
 

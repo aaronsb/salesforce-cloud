@@ -6,7 +6,7 @@
 type NextStep = { tool?: string; description: string; example?: Record<string, unknown> };
 
 function formatSteps(steps: NextStep[]): string {
-  const lines = ['\n---\n**Next steps:**'];
+  const lines = ['\n---\nNext steps:'];
   for (const step of steps) {
     const tool = step.tool ? `\`${step.tool}\`` : '';
     const example = step.example ? ` — \`${JSON.stringify(step.example)}\`` : '';

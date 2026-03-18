@@ -88,7 +88,7 @@ export const toolSchemas = {
   },
   generate_business_case: {
     name: 'generate_business_case',
-    description: 'Generate a professional business case document for an opportunity. Returns step-by-step instructions for gathering Salesforce data and using TeXFlow MCP server to create a formatted business case document.',
+    description: 'Generate a markdown business case report for an opportunity. Fetches opportunity details, contacts, conversation insights, and similar won deals to produce a complete report.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -98,13 +98,8 @@ export const toolSchemas = {
         },
         clientName: {
           type: 'string',
-          description: 'Optional client name to include in the business case title',
+          description: 'Optional client name to override the account name in the report title',
         },
-        outputFormat: {
-          type: 'string',
-          description: 'Output format for the business case document',
-          enum: ['pdf', 'docx', 'markdown']
-        }
       },
       required: ['opportunityId'],
     },

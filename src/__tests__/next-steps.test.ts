@@ -8,7 +8,7 @@ describe('getNextSteps', () => {
   describe('search_opportunities', () => {
     it('should suggest drill-down tools after search', () => {
       const result = getNextSteps('search_opportunities');
-      expect(result).toContain('**Next steps:**');
+      expect(result).toContain('Next steps:');
       expect(result).toContain('`get_opportunity_details`');
       expect(result).toContain('`analyze_conversation`');
       expect(result).toContain('`find_similar_opportunities`');
@@ -156,7 +156,7 @@ describe('getNextSteps', () => {
     it('should start with a horizontal rule and Next steps heading', () => {
       const result = getNextSteps('list_objects');
       expect(result).toMatch(/^[\n\s]*---/);
-      expect(result).toContain('**Next steps:**');
+      expect(result).toContain('Next steps:');
     });
 
     it('should format each step as a markdown list item', () => {

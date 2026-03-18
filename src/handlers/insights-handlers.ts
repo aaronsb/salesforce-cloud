@@ -1,5 +1,6 @@
 import { McpError, ErrorCode } from '@modelcontextprotocol/sdk/types.js';
 import { SalesforceClient } from '../client/salesforce-client.js';
+import { insightsResponse, simpleResponse } from '../utils/response-helper.js';
 
 interface OpportunityInsightsArgs {
   timeframe?: 'current_quarter' | 'last_quarter' | 'current_year' | 'last_year' | 'all_time';
@@ -110,30 +111,10 @@ export async function handleOpportunityInsights(
     // Strategic recommendations
     insights.strategicRecommendations = generateStrategicRecommendations(opportunities.results, insights);
 
-    return {
-      content: [
-        {
-          type: 'text',
-          text: JSON.stringify(insights, null, 2),
-        },
-      ],
-    };
+    return insightsResponse(insights, 'opportunity_insights');
 
   } catch (error: any) {
-    const errorResult = {
-      success: false,
-      error: error.message,
-      generatedAt: new Date().toISOString()
-    };
-
-    return {
-      content: [
-        {
-          type: 'text',
-          text: JSON.stringify(errorResult, null, 2),
-        },
-      ],
-    };
+    return simpleResponse(`Error: ${error.message}`, 'opportunity_insights');
   }
 }
 

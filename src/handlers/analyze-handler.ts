@@ -127,8 +127,8 @@ export async function handleAnalyze(client: SalesforceClient, args: any) {
 
   const numericFields = getAggregateFields(fieldMap).map(f => f.fieldName).slice(0, 5);
   const lines: string[] = [`## ${object} Summary`];
-  lines.push(`**Total records:** ${total}`);
-  lines.push(`**Filter:** ${filter || 'none'}`);
+  lines.push(`Total records: ${total}`);
+  lines.push(`Filter: ${filter || 'none'}`);
 
   if (numericFields.length > 0 && total > 0) {
     // Use explicit aliases so we can read results reliably

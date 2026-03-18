@@ -165,15 +165,14 @@ describe('renderOpportunity', () => {
     const result = renderOpportunity(fullOpp, 'full');
     expect(result).toContain('# Big Deal');
     expect(result).toContain('ID: 006ABC');
-    expect(result).toContain('**Stage:** [>] Proposal');
-    expect(result).toContain('**Amount:** $100K');
-    expect(result).toContain('**Probability:** 75%');
-    expect(result).toContain('## Description');
+    expect(result).toContain('[>] Proposal');
+    expect(result).toContain('$100K');
+    expect(result).toContain('Probability: 75%');
+    expect(result).toContain('Description:');
     expect(result).toContain('Important deal');
     expect(result).not.toContain('<p>'); // HTML stripped
-    expect(result).toContain('## Account');
-    expect(result).toContain('Acme Corp');
-    expect(result).toContain('## Contacts (1)');
+    expect(result).toContain('Account: Acme Corp');
+    expect(result).toContain('Contacts (1):');
     expect(result).toContain('Bob (Decision Maker)');
   });
 
@@ -217,8 +216,8 @@ describe('renderAccount', () => {
       AnnualRevenue: 5000000,
     }, 'full');
     expect(result).toContain('# Acme Corp');
-    expect(result).toContain('**Industry:** Technology');
-    expect(result).toContain('**Phone:** 555-1234');
+    expect(result).toContain('Technology');
+    expect(result).toContain('Phone: 555-1234');
     expect(result).toContain('$5.0M');
   });
 });
@@ -251,10 +250,10 @@ describe('renderContact', () => {
       Department: 'Engineering',
     }, 'full');
     expect(result).toContain('# Alice Johnson');
-    expect(result).toContain('**Title:** VP Engineering');
-    expect(result).toContain('**Phone:** 555-0000');
-    expect(result).toContain('**Department:** Engineering');
-    expect(result).toContain('**Account:** TechCo');
+    expect(result).toContain('VP Engineering');
+    expect(result).toContain('555-0000');
+    expect(result).toContain('Department: Engineering');
+    expect(result).toContain('Account: TechCo');
   });
 
   it('should build name from FirstName + LastName when Name is missing', () => {
@@ -304,8 +303,8 @@ describe('renderRecord', () => {
       attributes: { type: 'Task' },
     }, 'full');
     expect(result).toContain('# Task:');
-    expect(result).toContain('**Status:** Open');
-    expect(result).toContain('**Priority:** High');
+    expect(result).toContain('Status: Open');
+    expect(result).toContain('Priority: High');
     expect(result).not.toContain('attributes'); // should skip attributes
   });
 });
@@ -342,7 +341,7 @@ describe('renderList', () => {
     });
     expect(result).toContain('# Opportunity (75)');
     expect(result).toContain('Page 1/3');
-    expect(result).toContain('**Next page:** pageNumber=2');
+    expect(result).toContain('Next page: pageNumber=2');
   });
 });
 
@@ -377,7 +376,7 @@ describe('renderQueryResult', () => {
       totalPages: 4,
     });
     expect(result).toContain('Page 2/4');
-    expect(result).toContain('**Next page:** pageNumber=3');
+    expect(result).toContain('Next page: pageNumber=3');
   });
 
   it('should handle empty results', () => {
