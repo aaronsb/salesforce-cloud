@@ -3,8 +3,9 @@ import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import * as dotenv from 'dotenv';
 
-// Load environment variables from .env file
-dotenv.config();
+// Load environment variables from .env file (local dev only).
+// quiet: true suppresses stdout logging that corrupts the JSON-RPC stream.
+dotenv.config({ quiet: true });
 import {
   CallToolRequestSchema,
   ErrorCode,
