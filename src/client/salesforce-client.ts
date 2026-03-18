@@ -9,6 +9,7 @@ export class SalesforceClient {
   private SF_PASSWORD: string;
   private SF_LOGIN_URL: string;
   private conn!: jsforce.Connection;
+  private initialized = false;
 
   constructor() {
     this.SF_CLIENT_ID = process.env.SF_CLIENT_ID || '';
@@ -25,6 +26,13 @@ export class SalesforceClient {
         loginUrl: this.SF_LOGIN_URL,
       },
     });
+  }
+
+  /** Ensure authenticated before making API calls. Safe to call multiple times. */
+  async ensureInitialized() {
+    if (!this.initialized) {
+      await this.initialize();
+    }
   }
 
   async initialize() {
@@ -50,12 +58,14 @@ export class SalesforceClient {
         await this.conn.authorize({ grant_type: 'client_credentials' });
         console.error('Authenticated via client credentials flow');
       }
+      this.initialized = true;
     } catch (error: any) {
       throw new Error(`Salesforce login failed: ${error?.message || 'Unknown error'}`);
     }
   }
 
   async executeQuery(soql: string, pagination?: PaginationParams) {
+    await this.ensureInitialized();
     try {
       const paginatedQuery = addPaginationToQuery(soql, pagination);
       const result = await this.conn.query(paginatedQuery);
@@ -66,10 +76,11 @@ export class SalesforceClient {
   }
 
   async describeObject(
-    objectName: string, 
-    includeFields: boolean = false, 
+    objectName: string,
+    includeFields: boolean = false,
     pagination?: PaginationParams
   ): Promise<SimplifiedObject | PaginatedSimplifiedObject> {
+    await this.ensureInitialized();
     try {
       const metadata = await this.conn.describe(objectName);
       
@@ -119,6 +130,7 @@ export class SalesforceClient {
   }
 
   async createRecord(objectName: string, data: Record<string, any>) {
+    await this.ensureInitialized();
     try {
       const result = await this.conn.sobject(objectName).create(data);
       return {
@@ -132,6 +144,7 @@ export class SalesforceClient {
   }
 
   async updateRecord(objectName: string, id: string, data: Record<string, any>) {
+    await this.ensureInitialized();
     try {
       const result = await this.conn.sobject(objectName).update({ Id: id, ...data });
       return {
@@ -144,6 +157,7 @@ export class SalesforceClient {
   }
 
   async deleteRecord(objectName: string, id: string) {
+    await this.ensureInitialized();
     try {
       const result = await this.conn.sobject(objectName).destroy(id);
       return {
@@ -156,6 +170,7 @@ export class SalesforceClient {
   }
 
   async getUserInfo(): Promise<SimplifiedUserInfo> {
+    await this.ensureInitialized();
     try {
       const userInfo = await this.conn.identity();
       return simplifyUserInfo(userInfo);
@@ -165,6 +180,7 @@ export class SalesforceClient {
   }
 
   async listObjects(pagination?: PaginationParams) {
+    await this.ensureInitialized();
     try {
       const result = await this.conn.describeGlobal();
       return paginateResults(

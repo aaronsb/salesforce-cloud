@@ -176,10 +176,18 @@ class SalesforceServer {
   }
 
   async run() {
-    await this.sfClient.initialize();
+    // Connect MCP transport FIRST so the handshake completes immediately.
+    // Salesforce auth happens lazily on the first tool call — if it fails
+    // or hangs, it shouldn't block the MCP initialize/capabilities exchange.
     const transport = new StdioServerTransport();
     await this.server.connect(transport);
     console.error('Salesforce MCP server running on stdio');
+
+    // Kick off Salesforce auth in the background — errors are logged
+    // but don't crash the server; they'll surface on the first tool call.
+    this.sfClient.initialize().catch((err) => {
+      console.error(`Salesforce auth failed (will retry on first tool call): ${err.message}`);
+    });
   }
 }
 
