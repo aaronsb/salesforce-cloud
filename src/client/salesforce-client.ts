@@ -42,6 +42,11 @@ export class SalesforceClient {
         console.error('Authenticated via password flow');
       } else {
         // Client credentials flow: client ID + secret only
+        // Requires My Domain URL (e.g. https://yourcompany.my.salesforce.com)
+        if (this.SF_LOGIN_URL === 'https://login.salesforce.com') {
+          console.error('Warning: Client credentials flow typically requires a My Domain URL, not login.salesforce.com');
+          console.error('Set SF_LOGIN_URL=https://yourcompany.my.salesforce.com');
+        }
         await this.conn.authorize({ grant_type: 'client_credentials' });
         console.error('Authenticated via client credentials flow');
       }
