@@ -60,10 +60,8 @@ export async function handleCreateRecord(client: SalesforceClient, args: any, ca
   const result = await client.createRecord(args.objectName, args.data) as Record<string, any>;
   const id = result?.id || result?.Id || 'unknown';
 
-  if (cacheMiddleware && id !== 'unknown') {
-    const epoch = (result?.SystemModstamp as string) || new Date().toISOString();
-    cacheMiddleware.onRecordCreated(args.objectName, id, { ...args.data, Id: id }, epoch);
-  }
+  // Don't cache input data — Salesforce may add defaults, triggers, workflows.
+  // The next read will fetch the actual server state.
 
   return simpleResponse(
     `Created ${args.objectName} record: ${id}`,

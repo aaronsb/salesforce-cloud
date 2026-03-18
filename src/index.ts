@@ -141,19 +141,19 @@ class SalesforceServer {
             return await handleGetOpportunityDetails(this.sfClient, request.params.arguments, this.cacheMiddleware);
 
           case 'analyze_conversation':
-            return await handleAnalyzeConversation(request.params.arguments, this.sfClient);
+            return await handleAnalyzeConversation(this.sfClient, request.params.arguments);
 
           case 'generate_business_case':
-            return await handleGenerateBusinessCase(request.params.arguments, this.sfClient);
+            return await handleGenerateBusinessCase(this.sfClient, request.params.arguments);
 
           case 'enrich_opportunity':
-            return await handleEnrichOpportunity(request.params.arguments, this.sfClient);
+            return await handleEnrichOpportunity(this.sfClient, request.params.arguments);
 
           case 'find_similar_opportunities':
-            return await handleFindSimilarOpportunities(request.params.arguments, this.sfClient);
+            return await handleFindSimilarOpportunities(this.sfClient, request.params.arguments);
 
           case 'opportunity_insights':
-            return await handleOpportunityInsights(request.params.arguments, this.sfClient);
+            return await handleOpportunityInsights(this.sfClient, request.params.arguments);
 
           default:
             throw new McpError(ErrorCode.MethodNotFound, `Unknown tool: ${name}`);

@@ -1,6 +1,7 @@
 import { McpError, ErrorCode } from '@modelcontextprotocol/sdk/types.js';
 import { SalesforceClient } from '../client/salesforce-client.js';
 import { insightsResponse, simpleResponse } from '../utils/response-helper.js';
+import { escapeSoqlString } from '../utils/index.js';
 
 interface OpportunityInsightsArgs {
   timeframe?: 'current_quarter' | 'last_quarter' | 'current_year' | 'last_year' | 'all_time';
@@ -20,8 +21,8 @@ function isOpportunityInsightsArgs(obj: any): obj is OpportunityInsightsArgs {
 }
 
 export async function handleOpportunityInsights(
-  args: any,
-  sfClient: SalesforceClient
+  sfClient: SalesforceClient,
+  args: any
 ) {
   if (!isOpportunityInsightsArgs(args)) {
     throw new McpError(
@@ -50,11 +51,11 @@ export async function handleOpportunityInsights(
     }
     
     if (args.industry) {
-      conditions.push(`Account.Industry = '${args.industry}'`);
+      conditions.push(`Account.Industry = '${escapeSoqlString(args.industry)}'`);
     }
-    
+
     if (args.owner) {
-      conditions.push(`Owner.Name = '${args.owner}'`);
+      conditions.push(`Owner.Name = '${escapeSoqlString(args.owner)}'`);
     }
     
     const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';

@@ -2,6 +2,7 @@ import { McpError, ErrorCode } from '@modelcontextprotocol/sdk/types.js';
 import { SalesforceClient } from '../client/salesforce-client.js';
 import { ConversationAnalysisResult, ConversationInsights, ConversationAnalysisArgs } from '../types/conversation-types.js';
 import { conversationResponse, simpleResponse } from '../utils/response-helper.js';
+import { validateSalesforceId } from '../utils/index.js';
 
 function isConversationAnalysisArgs(obj: any): obj is ConversationAnalysisArgs {
   return (
@@ -19,11 +20,12 @@ export async function analyzeConversationInsights(
   opportunityId: string,
   sfClient: SalesforceClient,
 ): Promise<ConversationInsights> {
+  const validId = validateSalesforceId(opportunityId, 'opportunityId');
   const tasks = await sfClient.executeQuery(`
     SELECT Id, Subject, Description, Status, CreatedDate,
            ActivityDate, Priority, Type, TaskSubtype, WhoId, Who.Name
     FROM Task
-    WHERE WhatId = '${opportunityId}'
+    WHERE WhatId = '${validId}'
     ORDER BY CreatedDate DESC
   `);
 
@@ -80,8 +82,8 @@ export async function analyzeConversationInsights(
 }
 
 export async function handleAnalyzeConversation(
-  args: any,
-  sfClient: SalesforceClient
+  sfClient: SalesforceClient,
+  args: any
 ) {
   if (!isConversationAnalysisArgs(args)) {
     throw new McpError(

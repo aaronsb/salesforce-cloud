@@ -146,8 +146,11 @@ export async function handleBatch(
     }
   }
 
-  // Record executed operations for rate limiting
-  rateLimiter.record(args.operations);
+  // Record only executed operations for rate limiting (not skipped ones)
+  const executedOps = results
+    .filter(r => r.status !== 'skipped')
+    .map(r => args.operations[r.index]);
+  rateLimiter.record(executedOps);
 
   return {
     content: [{ type: 'text', text: renderBatchResults(results, detail) }],

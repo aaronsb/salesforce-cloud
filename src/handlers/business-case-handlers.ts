@@ -3,6 +3,7 @@ import { SalesforceClient } from '../client/salesforce-client.js';
 import { businessCaseResponse, simpleResponse } from '../utils/response-helper.js';
 import { BusinessCaseData } from '../utils/markdown-renderer.js';
 import { analyzeConversationInsights } from './conversation-handlers.js';
+import { validateSalesforceId } from '../utils/index.js';
 
 interface GenerateBusinessCaseArgs {
   opportunityId: string;
@@ -18,8 +19,8 @@ function isGenerateBusinessCaseArgs(obj: any): obj is GenerateBusinessCaseArgs {
 }
 
 export async function handleGenerateBusinessCase(
-  args: any,
-  sfClient: SalesforceClient
+  sfClient: SalesforceClient,
+  args: any
 ) {
   if (!isGenerateBusinessCaseArgs(args)) {
     throw new McpError(
@@ -29,17 +30,19 @@ export async function handleGenerateBusinessCase(
   }
 
   try {
+    const oppId = validateSalesforceId(args.opportunityId, 'opportunityId');
+
     // Fetch opportunity details
     const oppResult = await sfClient.executeQuery(`
       SELECT Id, Name, Amount, StageName, Probability, CloseDate, Description,
              Type, LeadSource, Account.Name, Account.Industry, Account.Website,
              Account.NumberOfEmployees, Owner.Name, Owner.Email
       FROM Opportunity
-      WHERE Id = '${args.opportunityId}'
+      WHERE Id = '${oppId}'
     `);
 
     if (!oppResult.results?.length) {
-      throw new McpError(ErrorCode.InvalidRequest, `Opportunity ${args.opportunityId} not found`);
+      throw new McpError(ErrorCode.InvalidRequest, `Opportunity ${oppId} not found`);
     }
 
     const opportunity = oppResult.results[0] as Record<string, any>;
@@ -53,11 +56,11 @@ export async function handleGenerateBusinessCase(
       sfClient.executeQuery(`
         SELECT Contact.Name, Contact.Title, Contact.Email, Contact.Phone, Role
         FROM OpportunityContactRole
-        WHERE OpportunityId = '${args.opportunityId}'
-      `).catch(() => ({ results: [] })),
+        WHERE OpportunityId = '${oppId}'
+      `).catch((err) => { console.error('Failed to fetch contacts:', err.message); return { results: [] }; }),
 
-      analyzeConversationInsights(args.opportunityId, sfClient)
-        .catch(() => undefined),
+      analyzeConversationInsights(oppId, sfClient)
+        .catch((err) => { console.error('Failed to analyze conversation:', err.message); return undefined; }),
 
       sfClient.executeQuery(`
         SELECT Id, Name, Amount, StageName, CloseDate, Account.Industry, Account.Name
@@ -65,7 +68,7 @@ export async function handleGenerateBusinessCase(
         WHERE IsWon = true AND Amount >= ${minAmount} AND Amount <= ${maxAmount}
         ORDER BY CloseDate DESC
         LIMIT 10
-      `).catch(() => ({ results: [] })),
+      `).catch((err) => { console.error('Failed to fetch similar deals:', err.message); return { results: [] }; }),
     ]);
 
     const data: BusinessCaseData = {

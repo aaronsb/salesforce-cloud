@@ -6,6 +6,7 @@ import { CacheMiddleware } from '../utils/cache-middleware.js';
 import { SessionCache } from '../utils/session-cache.js';
 import { Intent, getFieldsForIntent, getDefaultFields } from '../utils/field-profiles.js';
 import { buildFieldTypeMap } from '../utils/field-type-map.js';
+import { validateSalesforceId, escapeSoqlString } from '../utils/index.js';
 
 interface GetOpportunityDetailsParams {
   opportunityId: string;
@@ -51,8 +52,8 @@ function isSearchOpportunitiesParams(obj: any): obj is SearchOpportunitiesParams
 
 function sanitizeSearchPattern(pattern: string): string {
   return pattern
-    .replace(/'/g, "\\'")
-    .replace(/\\/g, "\\\\")
+    .replace(/\\/g, "\\\\")   // backslashes first
+    .replace(/'/g, "\\'")     // then single quotes
     .replace(/%/g, "\\%")
     .replace(/_/g, "\\_")
     .trim();
@@ -70,6 +71,8 @@ export async function handleGetOpportunityDetails(client: SalesforceClient, args
       'Invalid opportunity details parameters'
     );
   }
+
+  const oppId = validateSalesforceId(args.opportunityId, 'opportunityId');
 
   // Determine which fields to SELECT
   let selectFields: string[] | null = null;
@@ -97,7 +100,7 @@ export async function handleGetOpportunityDetails(client: SalesforceClient, args
 
     if (selectFields) {
       // Focused query — no subqueries to keep it lightweight
-      query = `SELECT ${selectFields.join(', ')} FROM Opportunity WHERE Id = '${args.opportunityId}'`;
+      query = `SELECT ${selectFields.join(', ')} FROM Opportunity WHERE Id = '${oppId}'`;
     } else {
       // Full query with subqueries (original behavior)
       query = `
@@ -115,7 +118,7 @@ export async function handleGetOpportunityDetails(client: SalesforceClient, args
                (SELECT Id, Subject, Status, Priority, CreatedDate
                 FROM Tasks ORDER BY CreatedDate DESC)
         FROM Opportunity
-        WHERE Id = '${args.opportunityId}'
+        WHERE Id = '${oppId}'
       `;
     }
 
@@ -133,7 +136,7 @@ export async function handleGetOpportunityDetails(client: SalesforceClient, args
                  Account.Name, Account.Industry, Account.Website,
                  Owner.Name, Owner.Email
           FROM Opportunity
-          WHERE Id = '${args.opportunityId}'
+          WHERE Id = '${oppId}'
         `;
         records = await client.executeQuery(safeQuery);
       } else {

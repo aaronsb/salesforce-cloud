@@ -1,6 +1,7 @@
 import { McpError, ErrorCode } from '@modelcontextprotocol/sdk/types.js';
 import { SalesforceClient } from '../client/salesforce-client.js';
 import { enrichmentResponse, simpleResponse } from '../utils/response-helper.js';
+import { validateSalesforceId } from '../utils/index.js';
 
 interface EnrichOpportunityArgs {
   opportunityId: string;
@@ -17,8 +18,8 @@ function isEnrichOpportunityArgs(obj: any): obj is EnrichOpportunityArgs {
 }
 
 export async function handleEnrichOpportunity(
-  args: any,
-  sfClient: SalesforceClient
+  sfClient: SalesforceClient,
+  args: any
 ) {
   if (!isEnrichOpportunityArgs(args)) {
     throw new McpError(
@@ -28,13 +29,15 @@ export async function handleEnrichOpportunity(
   }
 
   try {
+    const oppId = validateSalesforceId(args.opportunityId, 'opportunityId');
+
     // Get base opportunity data
     const oppQuery = `
-      SELECT Id, Name, Amount, StageName, Probability, CloseDate, 
+      SELECT Id, Name, Amount, StageName, Probability, CloseDate,
              Account.Name, Account.Industry, Account.Website, Account.NumberOfEmployees,
              Owner.Name, Owner.Email, Type, LeadSource
-      FROM Opportunity 
-      WHERE Id = '${args.opportunityId}'
+      FROM Opportunity
+      WHERE Id = '${oppId}'
     `;
     
     const opportunity = await sfClient.executeQuery(oppQuery);

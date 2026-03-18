@@ -1,6 +1,7 @@
 import { McpError, ErrorCode } from '@modelcontextprotocol/sdk/types.js';
 import { SalesforceClient } from '../client/salesforce-client.js';
 import { similarOpportunitiesResponse, simpleResponse } from '../utils/response-helper.js';
+import { validateSalesforceId, escapeSoqlString } from '../utils/index.js';
 
 interface FindSimilarOpportunitiesArgs {
   referenceOpportunityId?: string;
@@ -20,8 +21,8 @@ function isFindSimilarOpportunitiesArgs(obj: any): obj is FindSimilarOpportuniti
 }
 
 export async function handleFindSimilarOpportunities(
-  args: any,
-  sfClient: SalesforceClient
+  sfClient: SalesforceClient,
+  args: any
 ) {
   if (!isFindSimilarOpportunitiesArgs(args)) {
     throw new McpError(
@@ -35,12 +36,13 @@ export async function handleFindSimilarOpportunities(
     
     // If reference opportunity provided, get its details for pattern matching
     if (args.referenceOpportunityId) {
+      const refId = validateSalesforceId(args.referenceOpportunityId, 'referenceOpportunityId');
       const refQuery = `
         SELECT Id, Name, Amount, StageName, Probability, CloseDate, Type,
                Account.Name, Account.Industry, Account.NumberOfEmployees,
                Owner.Name, LeadSource
-        FROM Opportunity 
-        WHERE Id = '${args.referenceOpportunityId}'
+        FROM Opportunity
+        WHERE Id = '${refId}'
       `;
       
       const refResult = await sfClient.executeQuery(refQuery);
@@ -144,19 +146,19 @@ function buildSearchQuery(criteria: any, limit: number) {
   const conditions = [];
   
   if (criteria.industry) {
-    conditions.push(`Account.Industry = '${criteria.industry}'`);
+    conditions.push(`Account.Industry = '${escapeSoqlString(criteria.industry)}'`);
   }
-  
+
   if (criteria.minAmount) {
     conditions.push(`Amount >= ${criteria.minAmount}`);
   }
-  
+
   if (criteria.maxAmount) {
     conditions.push(`Amount <= ${criteria.maxAmount}`);
   }
-  
+
   if (criteria.stage) {
-    conditions.push(`StageName = '${criteria.stage}'`);
+    conditions.push(`StageName = '${escapeSoqlString(criteria.stage)}'`);
   }
   
   if (criteria.isWon !== undefined) {
