@@ -12,9 +12,10 @@ export class SalesforceClient {
   private initialized = false;
 
   constructor() {
-    // Resolve env vars, treating uninterpolated mcpb template strings as empty
+    // Resolve env vars, treating uninterpolated mcpb template strings
+    // and common placeholder values as empty
     const resolve = (val: string | undefined): string =>
-      val && !val.startsWith('${') ? val : '';
+      val && !val.startsWith('${') && !val.startsWith('YOUR_') ? val : '';
 
     this.SF_CLIENT_ID = resolve(process.env.SF_CLIENT_ID);
     this.SF_CLIENT_SECRET = resolve(process.env.SF_CLIENT_SECRET);

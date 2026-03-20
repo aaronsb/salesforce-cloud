@@ -105,6 +105,18 @@ describe('SalesforceClient', () => {
     expect(connInstance.login).not.toHaveBeenCalled();
   });
 
+  it('should treat YOUR_ placeholder values as empty and use client credentials flow', async () => {
+    process.env.SF_USERNAME = 'YOUR_SF_USERNAME';
+    process.env.SF_PASSWORD = 'YOUR_SF_PASSWORD';
+
+    const client = new SalesforceClient();
+    await client.initialize();
+
+    const connInstance = (jsforce.Connection as jest.Mock).mock.results[0].value;
+    expect(connInstance.authorize).toHaveBeenCalledWith({ grant_type: 'client_credentials' });
+    expect(connInstance.login).not.toHaveBeenCalled();
+  });
+
   it('should use password flow when username/password are provided', async () => {
     const client = new SalesforceClient();
     await client.initialize();
