@@ -21,6 +21,8 @@ threshold: 2.0
 - Cache `describe_object` results when possible — metadata changes rarely
 
 ## Authentication
-- OAuth2 password flow via environment variables
-- Connection is lazy-initialized on first API call
-- Check `SF_LOGIN_URL` for sandbox vs production orgs
+- Two flows: **client credentials** (default) or **password** (when `SF_USERNAME`/`SF_PASSWORD` are set)
+- Auth starts eagerly via `warmup()` at server construction — tool calls await the in-flight promise
+- If warmup fails (transient), `ensureInitialized()` retries once automatically
+- `resolve()` strips `${...}` template strings and `YOUR_*` placeholders as empty
+- Client credentials flow requires `SF_LOGIN_URL` set to My Domain (not `login.salesforce.com`)
