@@ -4,8 +4,28 @@ import { PaginationParams } from '../types/index.js';
 import { opportunityResponse, listResponse } from '../utils/response-helper.js';
 import { CacheMiddleware } from '../utils/cache-middleware.js';
 import { SessionCache } from '../utils/session-cache.js';
-import { Intent, getFieldsForIntent, getDefaultFields } from '../utils/field-profiles.js';
+import { Intent, getFieldsForIntent, getDefaultFields, filterFieldsByNames } from '../utils/field-profiles.js';
 import { buildFieldTypeMap } from '../utils/field-type-map.js';
+
+/** Resolve desired fields to only those that exist on the org, using describe + cache. */
+async function resolveFields(
+  client: SalesforceClient,
+  objectName: string,
+  desired: string[],
+  cacheMiddleware?: CacheMiddleware,
+): Promise<string[]> {
+  try {
+    const describeResult = cacheMiddleware
+      ? await cacheMiddleware.getCachedMetadata(objectName, () =>
+          client.describeObject(objectName, true) as Promise<unknown>)
+      : await client.describeObject(objectName, true);
+    const fieldTypeMap = buildFieldTypeMap(describeResult as { fields?: Array<{ name: string; type: string }> });
+    return filterFieldsByNames(fieldTypeMap, desired);
+  } catch {
+    // If describe fails, return defaults that are safe on any org
+    return getDefaultFields(objectName);
+  }
+}
 import { validateSalesforceId, escapeSoqlString } from '../utils/index.js';
 
 interface GetOpportunityDetailsParams {
@@ -102,13 +122,16 @@ export async function handleGetOpportunityDetails(client: SalesforceClient, args
       // Focused query — no subqueries to keep it lightweight
       query = `SELECT ${selectFields.join(', ')} FROM Opportunity WHERE Id = '${oppId}'`;
     } else {
-      // Full query with subqueries (original behavior)
+      // Full query — resolve fields against the org's schema
+      const fullFields = await resolveFields(client, 'Opportunity', [
+        'Id', 'Name', 'Amount', 'Type', 'StageName', 'Probability', 'CloseDate', 'Description',
+        'LeadSource', 'NextStep', 'ForecastCategory', 'ExpectedRevenue', 'TotalOpportunityQuantity',
+        'HasOpportunityLineItem', 'IsClosed', 'IsWon', 'LastActivityDate', 'SystemModstamp',
+        'Account.Name', 'Account.Industry', 'Account.Website',
+        'Owner.Name', 'Owner.Email',
+      ], cacheMiddleware);
       query = `
-        SELECT Id, Name, Amount, Type, StageName, Probability, CloseDate, Description,
-               LeadSource, NextStep, ForecastCategory, ExpectedRevenue, TotalOpportunityQuantity,
-               HasOpportunityLineItem, IsClosed, IsWon, LastActivityDate, SystemModstamp,
-               Account.Name, Account.Industry, Account.Website,
-               Owner.Name, Owner.Email,
+        SELECT ${fullFields.join(', ')},
                (SELECT Id, ContactId, Contact.Name, Contact.Email, Role
                 FROM OpportunityContactRoles),
                (SELECT Id, CreatedDate, Field, OldValue, NewValue
@@ -127,17 +150,16 @@ export async function handleGetOpportunityDetails(client: SalesforceClient, args
       records = await client.executeQuery(query);
     } catch (error) {
       if (!selectFields) {
-        // Full query failed — fall back to safe core fields
+        // Full query with subqueries failed — retry without subqueries
         console.error('Full opportunity query failed, falling back to core fields:', error);
-        const safeQuery = `
-          SELECT Id, Name, Amount, Type, StageName, Probability, CloseDate, Description,
-                 LeadSource, NextStep, ForecastCategory, ExpectedRevenue,
-                 IsClosed, IsWon, LastActivityDate, SystemModstamp,
-                 Account.Name, Account.Industry, Account.Website,
-                 Owner.Name, Owner.Email
-          FROM Opportunity
-          WHERE Id = '${oppId}'
-        `;
+        const coreFields = await resolveFields(client, 'Opportunity', [
+          'Id', 'Name', 'Amount', 'Type', 'StageName', 'Probability', 'CloseDate', 'Description',
+          'LeadSource', 'NextStep', 'ForecastCategory', 'ExpectedRevenue',
+          'IsClosed', 'IsWon', 'LastActivityDate', 'SystemModstamp',
+          'Account.Name', 'Account.Industry', 'Account.Website',
+          'Owner.Name', 'Owner.Email',
+        ], cacheMiddleware);
+        const safeQuery = `SELECT ${coreFields.join(', ')} FROM Opportunity WHERE Id = '${oppId}'`;
         records = await client.executeQuery(safeQuery);
       } else {
         throw error;
@@ -182,13 +204,14 @@ export async function handleSearchOpportunities(client: SalesforceClient, args: 
     conditions.push(`StageName = '${sanitizedStage}'`);
   }
 
-  let query = `
-    SELECT Id, Name, Amount, StageName, CloseDate, Description,
-           Account.Name, Account.Industry, Account.Website,
-           Owner.Name, Owner.Email,
-           ExpectedRevenue, Probability, Type
-    FROM Opportunity
-  `;
+  const searchFields = await resolveFields(client, 'Opportunity', [
+    'Id', 'Name', 'Amount', 'StageName', 'CloseDate', 'Description',
+    'Account.Name', 'Account.Industry', 'Account.Website',
+    'Owner.Name', 'Owner.Email',
+    'ExpectedRevenue', 'Probability', 'Type',
+  ]);
+
+  let query = `SELECT ${searchFields.join(', ')} FROM Opportunity`;
 
   if (conditions.length > 0) {
     query += ' WHERE ' + conditions.join(' AND ');
