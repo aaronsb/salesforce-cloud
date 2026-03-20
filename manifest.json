@@ -2,7 +2,7 @@
   "manifest_version": "0.3",
   "name": "salesforce-cloud",
   "display_name": "Salesforce Cloud",
-  "version": "0.3.5",
+  "version": "0.3.6",
   "description": "A Model Context Protocol server for Salesforce CRM integration",
   "author": {
     "name": "aaronsb",
