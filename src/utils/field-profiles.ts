@@ -47,7 +47,9 @@ export function getFieldsForIntent(
   intent: Intent,
   fieldTypeMap: Map<string, FieldTypeEntry>,
 ): string[] {
-  const fields = new Set<string>(STANDARD_FIELDS[intent]);
+  // Start with standard fields, filtered to those that exist on the org
+  const validStandard = filterFieldsByNames(fieldTypeMap, STANDARD_FIELDS[intent]);
+  const fields = new Set<string>(validStandard);
 
   // Add fields matching the intent's dynamic types
   const dynamicTypes = DYNAMIC_TYPES[intent];

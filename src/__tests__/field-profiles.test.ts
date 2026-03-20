@@ -83,12 +83,12 @@ describe('field-profiles', () => {
       expect(fields.length).toBe(unique.size);
     });
 
-    it('should return fields even with empty type map', () => {
+    it('should return only universal fields with empty type map', () => {
       const emptyMap = new Map();
       const fields = getFieldsForIntent('pipeline', emptyMap);
-      // Should still return standard fields
+      // With no describe data, only universal fields (Name, Owner.Name, etc.) survive
       expect(fields.length).toBeGreaterThan(0);
-      expect(fields).toContain('StageName');
+      expect(fields).toContain('Name');
     });
   });
 
