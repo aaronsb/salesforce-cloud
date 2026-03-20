@@ -9,7 +9,7 @@ export class SalesforceClient {
   private SF_PASSWORD: string;
   private SF_LOGIN_URL: string;
   private conn!: jsforce.Connection;
-  private initialized = false;
+  private initPromise: Promise<void> | null = null;
 
   constructor() {
     // Resolve env vars, treating uninterpolated mcpb template strings
@@ -33,10 +33,29 @@ export class SalesforceClient {
     });
   }
 
+  /** Kick off auth eagerly. Does not block; call ensureInitialized() to await. */
+  warmup() {
+    if (!this.initPromise) {
+      this.initPromise = this.initialize();
+      // Log warmup failures but don't swallow — ensureInitialized() will
+      // see the rejection and initPromise is already nulled in initialize().
+      this.initPromise.catch((err) => {
+        console.error('Warmup auth failed, will retry on first tool call:', err.message);
+      });
+    }
+  }
+
   /** Ensure authenticated before making API calls. Safe to call multiple times. */
   async ensureInitialized() {
-    if (!this.initialized) {
-      await this.initialize();
+    if (!this.initPromise) {
+      this.initPromise = this.initialize();
+    }
+    try {
+      await this.initPromise;
+    } catch {
+      // initPromise was nulled by initialize() on failure; retry
+      this.initPromise = this.initialize();
+      await this.initPromise;
     }
   }
 
@@ -65,8 +84,8 @@ export class SalesforceClient {
         await this.conn.authorize({ grant_type: 'client_credentials' });
         console.error('Authenticated via client credentials flow');
       }
-      this.initialized = true;
     } catch (error: any) {
+      this.initPromise = null;
       const detail = error?.message || 'Unknown error';
       const flow = hasUserCreds ? 'password' : 'client_credentials';
       console.error(`Auth failed (${flow} flow, login URL: ${this.SF_LOGIN_URL}): ${detail}`);

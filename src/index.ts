@@ -61,6 +61,7 @@ class SalesforceServer {
     );
 
     this.sfClient = new SalesforceClient();
+    this.sfClient.warmup();
     this.cache = new SessionCache();
     this.cacheMiddleware = new CacheMiddleware(this.cache);
 
