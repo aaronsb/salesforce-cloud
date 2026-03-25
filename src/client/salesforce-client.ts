@@ -1,6 +1,6 @@
 import jsforce from 'jsforce';
 import { PaginationParams, SimplifiedObject, SimplifiedUserInfo, PaginatedSimplifiedObject } from '../types/index.js';
-import { paginateResults, simplifyObjectMetadata, simplifyUserInfo, addPaginationToQuery } from '../utils/index.js';
+import { paginateResults, simplifyObjectMetadata, simplifyUserInfo, addPaginationToQuery, validateSalesforceId } from '../utils/index.js';
 
 export class SalesforceClient {
   private SF_CLIENT_ID: string;
@@ -230,6 +230,10 @@ export class SalesforceClient {
     documentId: string;
   }> {
     await this.ensureInitialized();
+
+    // Defense in depth: validate ID format at the query site, not just in the handler.
+    // Prevents SOQL injection if called from a different code path without handler validation.
+    validateSalesforceId(id, 'contentId');
 
     let versionId = id;
     let versionRecord: Record<string, any>;
