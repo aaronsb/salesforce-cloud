@@ -61,7 +61,10 @@ _release-commit:
 	git tag -a "v$(NEW_VERSION)" -m "v$(NEW_VERSION)"
 	git push && git push --tags
 	@echo ""
-	@echo "Released v$(NEW_VERSION). Run 'make publish-all' to publish everywhere."
+	@echo ""
+	@echo "Released v$(NEW_VERSION)."
+	@echo "  npm: publishing automatically via GitHub Actions trusted publisher"
+	@echo "  Run 'make publish-all' for MCPB bundle + MCP Registry + GitHub Release"
 
 # ── Publishing ──────────────────────────────────────────────────────────
 
@@ -76,18 +79,15 @@ mcpb: build     ## Build .mcpb desktop extension bundle
 	@echo ""
 	@echo "Built: salesforce-cloud-mcp.mcpb ($$(du -h salesforce-cloud-mcp.mcpb | cut -f1))"
 
-publish-all: mcpb  ## Publish to npm, MCP Registry, GitHub Release, and build MCPB
+publish-all: mcpb  ## Build MCPB, publish to MCP Registry + GitHub Release (npm via trusted publisher)
 	@echo ""
-	@echo "Publishing v$(VERSION) to all channels."
-	@echo "  1. npm (requires OTP)"
-	@echo "  2. MCP Registry (requires GitHub auth)"
-	@echo "  3. GitHub Release"
-	@echo "  4. MCPB bundle (already built)"
+	@echo "Publishing v$(VERSION):"
+	@echo "  - npm: automatic via GitHub Actions trusted publisher (triggered by tag push)"
+	@echo "  - MCP Registry: manual (below)"
+	@echo "  - GitHub Release: manual (below)"
+	@echo "  - MCPB bundle: already built"
 	@echo ""
 	@read -p "Continue? [y/N] " confirm && [ "$$confirm" = "y" ] || (echo "Aborted." && exit 1)
-	@echo ""
-	@echo "── npm ──"
-	@read -p "npm OTP: " otp && npm publish --access public --otp "$$otp"
 	@echo ""
 	@echo "── MCP Registry ──"
 	mcp-publisher login github
@@ -98,7 +98,7 @@ publish-all: mcpb  ## Publish to npm, MCP Registry, GitHub Release, and build MC
 	if [ -z "$$notes" ]; then notes="Release v$(VERSION)"; fi; \
 	gh release create "v$(VERSION)" --title "v$(VERSION)" --notes "$$notes" salesforce-cloud-mcp.mcpb
 	@echo ""
-	@echo "v$(VERSION) published to all channels."
+	@echo "v$(VERSION) published. npm publishes automatically from the v$(VERSION) tag."
 	@echo "MCPB bundle: salesforce-cloud-mcp.mcpb"
 
 help:           ## Show this help
