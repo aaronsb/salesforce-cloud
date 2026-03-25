@@ -144,17 +144,25 @@ export function formatFieldValue(key: string, value: unknown): string | null {
   // Skip Salesforce metadata and nested objects/arrays (handled structurally)
   if (key === 'attributes') return null;
 
-  // Suppress FK ID fields — opaque 18-char IDs are noise in display
+  // FK ID suppression is handled by projectRemainingFields with full record context.
+  // Here we just format IDs as-is when they survive that filter.
   if (/Id$/.test(key) && typeof value === 'string' && SF_ID_PATTERN.test(value)) {
-    return null;
+    return value;
   }
 
   if (typeof value === 'object') {
     if (Array.isArray(value)) return `${value.length} items`;
-    // Named sub-objects get name extracted
     const obj = value as Record<string, any>;
+    // Named sub-objects get name extracted
     if (obj.Name || obj.name) return obj.Name || obj.name;
-    return null; // skip complex nested objects
+    // Flatten non-Name objects (e.g., ContentDocument with Title/FileType)
+    const parts: string[] = [];
+    for (const [k, v] of Object.entries(obj)) {
+      if (k === 'attributes' || v == null) continue;
+      if (typeof v === 'object') continue;
+      parts.push(`${humanizeFieldName(k)}: ${v}`);
+    }
+    return parts.length > 0 ? parts.join(' | ') : null;
   }
 
   const lower = key.toLowerCase();
@@ -213,6 +221,15 @@ export function projectRemainingFields(
 
   for (const [key, value] of Object.entries(record)) {
     if (consumedKeys.has(key)) continue;
+
+    // Suppress FK ID fields only when the corresponding relationship object exists.
+    // e.g., suppress AccountId when record.Account is present, but keep
+    // ContentDocumentId when record.ContentDocument is absent.
+    if (/Id$/.test(key) && key !== 'Id' && typeof value === 'string' && SF_ID_PATTERN.test(value)) {
+      const relationshipKey = key.replace(/Id$/, '');
+      if (record[relationshipKey] != null) continue;
+    }
+
     const formatted = formatFieldValue(key, value);
     if (formatted == null) continue;
     lines.push(`${humanizeFieldName(key)}: ${formatted}`);

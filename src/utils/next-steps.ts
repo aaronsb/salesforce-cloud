@@ -133,6 +133,13 @@ export function getNextSteps(toolName: string, result?: Record<string, any>): st
       );
       break;
 
+    case 'download_file':
+      steps.push(
+        { description: 'Find more files on a record', tool: 'execute_soql', example: { query: "SELECT ContentDocumentId, ContentDocument.Title FROM ContentDocumentLink WHERE LinkedEntityId = '<recordId>'" } },
+        { description: 'View file version history', tool: 'execute_soql', example: { query: `SELECT Id, Title, VersionNumber, CreatedDate FROM ContentVersion WHERE ContentDocumentId = '${result?.documentId || '<documentId>'}'` } },
+      );
+      break;
+
     case 'get_user_info':
       steps.push(
         { description: 'List available objects', tool: 'list_objects' },

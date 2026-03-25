@@ -28,6 +28,7 @@ import { handleFindSimilarOpportunities } from './handlers/pattern-handlers.js';
 import { handleOpportunityInsights } from './handlers/insights-handlers.js';
 import { handleAnalyze } from './handlers/analyze-handler.js';
 import { handleBatch } from './handlers/batch-handler.js';
+import { handleDownloadFile } from './handlers/file-handlers.js';
 import { toolSchemas } from './schemas/tool-schemas.js';
 import { SessionCache } from './utils/session-cache.js';
 import { CacheMiddleware } from './utils/cache-middleware.js';
@@ -132,6 +133,9 @@ class SalesforceServer {
 
           case 'get_user_info':
             return await handleGetUserInfo(this.sfClient);
+
+          case 'download_file':
+            return await handleDownloadFile(this.sfClient, request.params.arguments);
 
           case 'list_objects':
             return await handleListObjects(this.sfClient, request.params.arguments);

@@ -27,6 +27,9 @@ declare module 'jsforce' {
 
   export class Connection implements ConnectionInterface {
     constructor(config: ConnectionConfig);
+    instanceUrl: string;
+    accessToken: string;
+    version: string;
     login(username: string, password: string): Promise<any>;
     authorize(params: { grant_type: string }): Promise<any>;
     query(soql: string): Promise<any>;
@@ -34,5 +37,6 @@ declare module 'jsforce' {
     identity(): Promise<any>;
     describeGlobal(): Promise<any>;
     sobject(objectName: string): SObjectCRUD;
+    request(info: string | { url: string; method?: string }, options?: { encoding?: string | null }): Promise<any>;
   }
 }

@@ -412,6 +412,20 @@ export const toolSchemas = {
       properties: {},
     },
   },
+  download_file: {
+    name: 'download_file',
+    description: 'Download a file from Salesforce. Accepts a ContentVersionId (068...) or ContentDocumentId (069...). Saves to a sandboxed workspace directory (default: ~/.local/share/salesforce-cloud-mcp/workspace/, configurable via SF_WORKSPACE_DIR). Text files (CSV, JSON, XML, TXT, etc.) also return content inline. Binary files return the saved path.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        contentId: {
+          type: 'string',
+          description: 'ContentVersionId (068...) or ContentDocumentId (069...). Find these by querying ContentDocumentLink: SELECT ContentDocumentId FROM ContentDocumentLink WHERE LinkedEntityId = \'<recordId>\'',
+        },
+      },
+      required: ['contentId'],
+    },
+  },
   list_objects: {
     name: 'list_objects',
     description: 'List all available Salesforce objects, including both standard and custom objects',

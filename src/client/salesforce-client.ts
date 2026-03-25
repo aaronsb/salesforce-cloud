@@ -214,6 +214,83 @@ export class SalesforceClient {
     }
   }
 
+  /**
+   * Download a file's binary content from Salesforce ContentVersion.
+   * Returns the file buffer along with metadata (filename, mime type, size).
+   *
+   * Accepts either a ContentVersionId or ContentDocumentId.
+   * If a ContentDocumentId is given, resolves the latest published version first.
+   */
+  async downloadFile(id: string): Promise<{
+    buffer: Buffer;
+    filename: string;
+    mimeType: string;
+    contentSize: number;
+    versionId: string;
+    documentId: string;
+  }> {
+    await this.ensureInitialized();
+
+    let versionId = id;
+    let versionRecord: Record<string, any>;
+
+    // ContentDocument IDs start with '069', ContentVersion IDs start with '068'
+    // If it looks like a ContentDocumentId, resolve the latest version
+    const prefix = id.substring(0, 3);
+    if (prefix === '069') {
+      // Use CreatedDate ordering instead of a "latest version" boolean field,
+      // which varies across orgs (IsLatestVersion vs IsLatest). See ADR-300.
+      const result = await this.conn.query(
+        `SELECT Id, Title, FileExtension, ContentSize, FileType, ContentDocumentId ` +
+        `FROM ContentVersion WHERE ContentDocumentId = '${id}' ORDER BY CreatedDate DESC LIMIT 1`
+      );
+      if (!result.records || result.records.length === 0) {
+        throw new Error(`No ContentVersion found for ContentDocumentId: ${id}`);
+      }
+      versionRecord = result.records[0];
+      versionId = versionRecord.Id;
+    } else {
+      // Fetch version metadata
+      const result = await this.conn.query(
+        `SELECT Id, Title, FileExtension, ContentSize, FileType, ContentDocumentId ` +
+        `FROM ContentVersion WHERE Id = '${versionId}' LIMIT 1`
+      );
+      if (!result.records || result.records.length === 0) {
+        throw new Error(`ContentVersion not found: ${versionId}`);
+      }
+      versionRecord = result.records[0];
+    }
+
+    // Build filename from Title + FileExtension
+    const title = versionRecord.Title || 'unnamed';
+    const ext = versionRecord.FileExtension ? `.${versionRecord.FileExtension}` : '';
+    const filename = title.endsWith(ext) ? title : `${title}${ext}`;
+
+    // Map Salesforce FileType to MIME type
+    const mimeType = sfFileTypeToMime(versionRecord.FileType, versionRecord.FileExtension);
+
+    // Download binary content directly via fetch — jsforce v3's request()
+    // parses all responses as text/JSON, corrupting binary data.
+    const apiVersion = this.conn.version || '59.0';
+    const blobUrl = `${this.conn.instanceUrl}/services/data/v${apiVersion}/sobjects/ContentVersion/${versionId}/VersionData`;
+    const fetchResponse = await fetch(blobUrl, {
+      headers: { Authorization: `Bearer ${this.conn.accessToken}` },
+    });
+    if (!fetchResponse.ok) {
+      throw new Error(`File download failed: ${fetchResponse.status} ${fetchResponse.statusText}`);
+    }
+    const buffer = Buffer.from(await fetchResponse.arrayBuffer());
+
+    return {
+      buffer,
+      filename,
+      mimeType,
+      contentSize: versionRecord.ContentSize || buffer.length,
+      versionId,
+      documentId: versionRecord.ContentDocumentId,
+    };
+  }
+
   async listObjects(pagination?: PaginationParams) {
     await this.ensureInitialized();
     try {
@@ -226,4 +303,51 @@ export class SalesforceClient {
       throw new Error(`List objects failed: ${error?.message || 'Unknown error'}`);
     }
   }
+}
+
+/** Map Salesforce FileType codes to MIME types. */
+function sfFileTypeToMime(fileType?: string, fileExtension?: string): string {
+  const ext = (fileExtension || '').toLowerCase();
+  const type = (fileType || '').toUpperCase();
+
+  const mimeMap: Record<string, string> = {
+    PDF: 'application/pdf',
+    WORD: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    WORD_X: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    EXCEL: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    EXCEL_X: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    POWER_POINT: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    POWER_POINT_X: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    CSV: 'text/csv',
+    TEXT: 'text/plain',
+    JSON: 'application/json',
+    XML: 'application/xml',
+    HTML: 'text/html',
+    PNG: 'image/png',
+    JPG: 'image/jpeg',
+    JPEG: 'image/jpeg',
+    GIF: 'image/gif',
+    SVG: 'image/svg+xml',
+    ZIP: 'application/zip',
+    MP4: 'video/mp4',
+    MOV: 'video/quicktime',
+  };
+
+  if (mimeMap[type]) return mimeMap[type];
+
+  // Fallback: guess from extension
+  const extMap: Record<string, string> = {
+    pdf: 'application/pdf', doc: 'application/msword',
+    docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    xls: 'application/vnd.ms-excel',
+    xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    csv: 'text/csv', txt: 'text/plain', json: 'application/json',
+    xml: 'application/xml', html: 'text/html', htm: 'text/html',
+    png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg',
+    gif: 'image/gif', svg: 'image/svg+xml', zip: 'application/zip',
+    mp4: 'video/mp4', mov: 'video/quicktime',
+  };
+
+  return extMap[ext] || 'application/octet-stream';
 }

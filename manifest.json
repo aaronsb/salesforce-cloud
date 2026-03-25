@@ -37,7 +37,8 @@
         "SF_CLIENT_SECRET": "${user_config.sf_client_secret}",
         "SF_USERNAME": "${user_config.sf_username}",
         "SF_PASSWORD": "${user_config.sf_password}",
-        "SF_LOGIN_URL": "${user_config.sf_login_url}"
+        "SF_LOGIN_URL": "${user_config.sf_login_url}",
+        "SF_WORKSPACE_DIR": "${user_config.sf_workspace_dir}"
       }
     }
   },
@@ -99,6 +100,10 @@
       "description": "Get current Salesforce user information"
     },
     {
+      "name": "download_file",
+      "description": "Download files from Salesforce to a sandboxed workspace directory"
+    },
+    {
       "name": "analyze",
       "description": "Run analytics on any Salesforce object with field-type-aware grouping and aggregation"
     },
@@ -141,6 +146,11 @@
       "title": "Login URL",
       "description": "Your Salesforce My Domain URL (e.g., https://company.my.salesforce.com)",
       "required": true
+    },
+    "sf_workspace_dir": {
+      "type": "string",
+      "title": "Workspace Directory",
+      "description": "Directory for downloaded files (default: ~/.local/share/salesforce-cloud-mcp/workspace/). Must not be a protected directory like $HOME or ~/Documents."
     }
   },
   "compatibility": {

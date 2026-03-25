@@ -448,8 +448,14 @@ describe('formatFieldValue', () => {
     expect(formatFieldValue('Tags', ['a', 'b', 'c'])).toBe('3 items');
   });
 
-  it('should return null for complex nested objects without Name', () => {
-    expect(formatFieldValue('SomeBlob', { foo: 'bar' })).toBeNull();
+  it('should flatten nested objects without Name into pipe-delimited fields', () => {
+    expect(formatFieldValue('SomeBlob', { foo: 'bar' })).toBe('foo: bar');
+    expect(formatFieldValue('ContentDocument', { Title: 'Report', FileType: 'PDF' }))
+      .toBe('Title: Report | File Type: PDF');
+  });
+
+  it('should return null for nested objects with only null/attributes/nested values', () => {
+    expect(formatFieldValue('Empty', { attributes: { type: 'X' } })).toBeNull();
   });
 
   it('should truncate long string values', () => {
@@ -459,13 +465,11 @@ describe('formatFieldValue', () => {
     expect(result).toMatch(/\.\.\.$/);
   });
 
-  it('should suppress FK ID fields with Salesforce-shaped values', () => {
-    // 18-char SF ID
-    expect(formatFieldValue('CampaignId', '006VW00000MYYgxYAH')).toBeNull();
-    // 15-char SF ID
-    expect(formatFieldValue('ParentId', '006VW00000MYYgx')).toBeNull();
-    // ReportsToId
-    expect(formatFieldValue('ReportsToId', '003ABC000000001AAA')).toBeNull();
+  it('should return FK ID field values (suppression is handled by projectRemainingFields)', () => {
+    // formatFieldValue now returns the ID; projectRemainingFields handles contextual suppression
+    expect(formatFieldValue('CampaignId', '006VW00000MYYgxYAH')).toBe('006VW00000MYYgxYAH');
+    expect(formatFieldValue('ParentId', '006VW00000MYYgx')).toBe('006VW00000MYYgx');
+    expect(formatFieldValue('ReportsToId', '003ABC000000001AAA')).toBe('003ABC000000001AAA');
   });
 
   it('should not suppress Id-suffixed fields with non-SF values', () => {
@@ -520,6 +524,21 @@ describe('projectRemainingFields', () => {
     const record = { Id: '001', Name: 'Test' };
     const consumed = new Set(['Id', 'Name']);
     expect(projectRemainingFields(record, consumed)).toHaveLength(0);
+  });
+
+  it('should suppress FK ID when relationship object exists', () => {
+    const record = { Id: '001', AccountId: '001ABC000000001AAA', Account: { Name: 'Acme' } };
+    const consumed = new Set(['Id']);
+    const result = projectRemainingFields(record, consumed);
+    expect(result.some(l => l.includes('001ABC000000001AAA'))).toBe(false);
+    expect(result.some(l => l.includes('Acme'))).toBe(true);
+  });
+
+  it('should show FK ID when relationship object is absent', () => {
+    const record = { Id: '001', ContentDocumentId: '069ABC000000001AAA' };
+    const consumed = new Set(['Id']);
+    const result = projectRemainingFields(record, consumed);
+    expect(result.some(l => l.includes('069ABC000000001AAA'))).toBe(true);
   });
 });
 
@@ -639,28 +658,39 @@ describe('renderRecord generic with formatFieldValue', () => {
     expect(result).toContain('Active: Yes');
   });
 
-  it('should silently skip complex nested objects without Name', () => {
+  it('should flatten nested objects without Name into display', () => {
     const result = renderRecord('CustomObj', {
       Id: '123',
       Name: 'Thing',
       BlobField: { data: 'binary', size: 1024 },
       GoodField: 'visible',
     }, 'full');
-    expect(result).not.toContain('BlobField');
-    expect(result).not.toContain('binary');
+    expect(result).toContain('Blob Field: data: binary | size: 1024');
     expect(result).toContain('Good Field: visible');
   });
 
-  it('should suppress FK ID fields in full mode', () => {
-    const result = renderRecord('CustomObj', {
+  it('should suppress FK ID fields only when relationship object is present', () => {
+    // CampaignId shown when Campaign object is NOT present
+    const withoutRelation = renderRecord('CustomObj', {
       Id: '123',
       Name: 'Thing',
       CampaignId: '701VW00000ABCDeAAB',
       Custom__c: 'visible',
     }, 'full');
-    expect(result).not.toContain('CampaignId');
-    expect(result).not.toContain('701VW00000ABCDeAAB');
-    expect(result).toContain('Custom: visible');
+    expect(withoutRelation).toContain('701VW00000ABCDeAAB');
+    expect(withoutRelation).toContain('Custom: visible');
+
+    // CampaignId suppressed when Campaign object IS present
+    const withRelation = renderRecord('CustomObj', {
+      Id: '123',
+      Name: 'Thing',
+      CampaignId: '701VW00000ABCDeAAB',
+      Campaign: { Name: 'Spring Promo' },
+      Custom__c: 'visible',
+    }, 'full');
+    expect(withRelation).not.toContain('701VW00000ABCDeAAB');
+    expect(withRelation).toContain('Spring Promo');
+    expect(withRelation).toContain('Custom: visible');
   });
 });
 
