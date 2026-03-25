@@ -2,7 +2,7 @@
   "manifest_version": "0.3",
   "name": "salesforce-cloud-mcp",
   "display_name": "Salesforce Cloud",
-  "version": "0.3.6",
+  "version": "0.4.0",
   "description": "MCP server for Salesforce CRM — manage opportunities, accounts, contacts, SOQL queries, and analytics",
   "author": {
     "name": "aaronsb",

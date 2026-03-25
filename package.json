@@ -1,7 +1,7 @@
 {
   "name": "@aaronsb/salesforce-cloud-mcp",
   "mcpName": "io.github.aaronsb/salesforce-cloud",
-  "version": "0.3.6",
+  "version": "0.4.0",
   "description": "A Model Context Protocol server for Salesforce",
   "author": "aaronsb",
   "license": "MIT",
