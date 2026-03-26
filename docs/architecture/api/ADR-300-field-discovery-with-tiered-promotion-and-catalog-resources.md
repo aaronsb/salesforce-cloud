@@ -28,13 +28,34 @@ Implement a two-tier field discovery system that runs at server startup (async, 
 
 Fields that pass qualification and meet a usage threshold. These are surfaced proactively in tool schemas, next-steps suggestions, and the field catalog resource.
 
-**Qualification pipeline:**
+**Discovery pipeline:**
 
-1. **Describe** — fetch field metadata for core objects (Account, Opportunity, Contact, Lead, Contract, ContentVersion, plus any objects seen in recent queries)
-2. **Quality gate** — exclude fields with no label beyond the API name and no help text (the Salesforce equivalent of Jira's "no description" filter)
-3. **Usage scoring** — for custom fields, run a sampling query: `SELECT {field}, COUNT(Id) FROM {Object} WHERE {field} != null GROUP BY {field}` to estimate population density
-4. **Tail-curve cutoff** — find the knee in the usage distribution (largest relative drop between adjacent fields) to automatically cap promoted fields. Hard cap at ~40 fields per object.
-5. **Well-known field resolution** — for fields with known semantic meaning but variable names (e.g., "latest version" boolean on ContentVersion), resolve by matching label patterns and field type rather than hardcoding API names
+1. **Describe** — fetch field metadata for core objects (Account, Opportunity, Contact, Lead, Contract, ContentVersion, plus any objects seen in recent queries). Parallel with bounded concurrency (default: 3).
+2. **Type classification** — use `field-type-map.ts` to classify each field into computation categories (numeric, categorical, text, temporal, identifier, flag, compound, binary). The `isScorable()` function determines which fields can be population-scored.
+3. **Usage scoring** — for scorable fields, run `SELECT COUNT(Id) FROM {Object} WHERE {field} != null` with rate-limited parallel execution (default: 5 concurrent) and exponential backoff on 429s.
+
+**Regulator pipeline (scoring):**
+
+After raw population scores are collected, a composable `FieldRegulator` applies scoring adjustments. Each regulator is a pure function that takes a field + context and returns a score delta with a reason. Regulators stack — order doesn't matter, all run on every field.
+
+| Regulator | Signal | Effect |
+|-----------|--------|--------|
+| `population` | `WHERE field != null` count | Base score (0-100) |
+| `namespace` | Managed package prefix (`DOZISF__`, `adroll__`, etc.) | -20 to -40 penalty |
+| `labelDemotion` | "Deprecated", "DO NOT USE", `z[` prefix, `TECH` prefix | -30 to -80 penalty |
+| `qualityBoost` | Has help text | +15 boost |
+| `typeRelevance` | Categorical/numeric fields more analytically useful | +5 to +10 boost |
+| `autoPopulated` | System/formula fields (PhotoUrl, Record_ID, etc.) | -50 penalty |
+
+The regulator stack is extensible — new regulators (e.g., recency weighting) can be added without modifying existing ones. Each field's final score includes an audit trail of all adjustments, making promotion decisions transparent and debuggable.
+
+**Promotion cutoff:**
+
+After regulation, fields are ranked by composite score. The cutoff uses the tail-curve knee (largest relative score drop) with a hard cap (default: 40 per object). Fields with score ≤ 0 are never promoted regardless of position.
+
+**Well-known field resolution:**
+
+Fields with known semantic meaning but variable API names (e.g., "latest version" boolean on ContentVersion) are resolved by label pattern + field type matching rather than hardcoding names.
 
 ### Tier 2: Discoverable fields
 
@@ -56,17 +77,25 @@ Expose discovery results as MCP resources for agent elicitation (extends ADR-103
 
 These resources give the agent a pre-filtered, ranked view of what fields matter on an object before it writes a SOQL query — reducing round-trips and improving query accuracy.
 
+### Context explosion controls
+
+Discovery can produce hundreds of promoted fields across multiple objects. Uncontrolled injection into tool schemas would create context pressure — the cure worse than the disease. Defense is layered:
+
+| Layer | Control | Scope |
+|-------|---------|-------|
+| Field scoring | Regulator pipeline (negative scores never promote) | Per field |
+| Object cap | Hard cap + knee cutoff (default: 40 per object) | Per object |
+| Startup scope | Core objects only; others discovered on-demand | Per session |
+| Schema budget | Tool descriptions get summary only; full catalog in resources | Per tool call |
+| Global budget | Total promoted field count cap across all objects (default: 200) | Per server |
+
+**Schema vs resource split:** Tool descriptions include a brief summary ("Account: 35 promoted fields — read `salesforce://field-catalog/Account` for details"). The full ranked catalog lives in MCP resources, which agents pull on-demand. This keeps `ListTools` responses small regardless of org complexity.
+
+**Internal field resolution:** Code that needs specific field names (like `downloadFile` resolving "latest version" boolean) queries the discovery cache directly — no schema injection needed. This is a lookup, not a context expansion.
+
 ### Async tool property factory
 
-Discovery results feed back into tool registration. When the server registers tools via `ListTools`, promoted fields are injected into tool schemas dynamically:
-
-- `execute_soql` schema gains per-object field hints in its description: "Opportunity promoted fields: Amount, StageName, CloseDate, Custom_Revenue__c..."
-- `describe_object` includes promotion status and usage scores alongside standard metadata
-- Internal field references (like "latest version" boolean in `downloadFile`) resolve through the factory rather than hardcoding API names
-
-The factory runs after discovery completes. If discovery hasn't finished when `ListTools` is called, the server returns base schemas (current behavior). Once discovery completes, subsequent `ListTools` calls return enriched schemas. This is transparent to the agent — it just sees better tool descriptions over time.
-
-This is distinct from the catalog resource: the resource is agent-readable context for planning; the factory is machine-readable schema that shapes what the agent can express in tool calls.
+After discovery completes, tool descriptions are enriched with per-object summaries and field counts. If discovery hasn't finished when `ListTools` is called, the server returns base schemas (current behavior). This is transparent to the agent — it just sees better tool descriptions over time.
 
 ### Startup and caching
 
@@ -107,6 +136,26 @@ This gives transparency into filtering decisions and helps diagnose issues when 
 - `describe_object` continues to work as-is for ad-hoc exploration
 - Existing tool schemas don't change — promoted fields enhance suggestions, not restrict access
 - The field catalog resource enables but doesn't require elicitation workflows
+
+## Experimental Validation
+
+Validated against Praecipio's production Salesforce org (6 core objects, 665 total fields). Experiment code in `experiments/` on the `experiment/field-discovery-validation` branch.
+
+| Hypothesis | Result | Data |
+|-----------|--------|------|
+| H1: Describe latency | **PASS** | 6.1s total with 3-concurrent parallelism. Each describe ~300-430ms. |
+| H2: Quality gate | **PASS** | 49% of fields pass (help text + meaningful label). Filters meaningfully without being too aggressive. |
+| H3: Usage scoring | **PASS** | 0 errors after using `isScorable()` type classification to exclude compound, binary, textarea, identifier types. |
+| H4: Tail-curve cutoff | **PASS** | Clear knee on every object. ContentVersion: 10 promoted. Contact: 32. Account/Opportunity hit 40-field hard cap. |
+| H5: Well-known resolution | **PASS** | `ContentVersion.IsLatest` found by label "Is Latest" + type `boolean`. |
+| H6: Regulator pipeline | **PASS** | Correctly demotes: managed packages (adroll__ -80), deprecated labels (-80), auto-populated system fields (-50), TECH prefix (-30). Correctly boosts: help text (+15), categorical/numeric types (+10). |
+
+### Key findings
+
+- **Type classification is the bridge.** The existing `field-type-map.ts` (ADR-101) already classifies every Salesforce type. Adding `isScorable()` eliminated all 24 scoring errors from the initial probe run — compound addresses, long text, and binary fields are excluded cleanly.
+- **Regulators catch what population misses.** `adroll__Click_Conversion__c` was 100% populated but correctly scored -10 (managed package penalty + deprecated label). `PhotoUrl` was 100% populated but dropped to score 50 (auto-populated penalty).
+- **Concurrency controls work.** 3-concurrent describes + 5-concurrent scoring queries completed in 6s with zero 429s. Exponential backoff with jitter is available but wasn't triggered at this concurrency level.
+- **Messy org defense.** The namespace regulator, label demotion, and auto-populated detection together handle the "500 fields from 5 managed packages" scenario — junk fields score negative regardless of population density.
 
 ## Alternatives Considered
 

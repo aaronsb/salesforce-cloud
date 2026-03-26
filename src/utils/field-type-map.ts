@@ -159,6 +159,34 @@ const SF_TYPE_MAP: Record<string, FieldTypeInfo> = {
   },
 };
 
+/** Encrypted string — not queryable in WHERE */
+const ENCRYPTED_TYPE: FieldTypeInfo = {
+  computationType: 'binary',
+  validOperations: [],
+  soqlNotes: 'Encrypted; cannot filter or aggregate',
+};
+
+// Register encryptedstring
+SF_TYPE_MAP['encryptedstring'] = ENCRYPTED_TYPE;
+
+/**
+ * Determine whether a field type supports population scoring
+ * (i.e., can be used in `WHERE field != null` queries).
+ *
+ * This is stricter than general filterability — long text (textarea)
+ * is technically a text type but Salesforce disallows `!= null` on it.
+ */
+export function isScorable(sfFieldType: string): boolean {
+  const info = getComputationType(sfFieldType);
+  // These types cannot appear in WHERE clauses at all
+  if (info.computationType === 'compound' || info.computationType === 'binary') return false;
+  // Identifiers are always populated or meaningless to score
+  if (info.computationType === 'identifier') return false;
+  // Long text fields can't use != null in WHERE
+  if (sfFieldType.toLowerCase() === 'textarea') return false;
+  return true;
+}
+
 /** Default for unknown Salesforce field types */
 const UNKNOWN_TYPE_INFO: FieldTypeInfo = {
   computationType: 'text',
