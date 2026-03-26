@@ -1,6 +1,7 @@
 import jsforce from 'jsforce';
 import { PaginationParams, SimplifiedObject, SimplifiedUserInfo, PaginatedSimplifiedObject } from '../types/index.js';
 import { paginateResults, simplifyObjectMetadata, simplifyUserInfo, addPaginationToQuery, validateSalesforceId } from '../utils/index.js';
+import type { FieldDiscovery } from './field-discovery.js';
 
 export class SalesforceClient {
   private SF_CLIENT_ID: string;
@@ -43,6 +44,11 @@ export class SalesforceClient {
         console.error('Warmup auth failed, will retry on first tool call:', err.message);
       });
     }
+  }
+
+  /** Get the underlying jsforce Connection (must be initialized first). */
+  getConnection(): jsforce.Connection {
+    return this.conn;
   }
 
   /** Ensure authenticated before making API calls. Safe to call multiple times. */
@@ -220,8 +226,11 @@ export class SalesforceClient {
    *
    * Accepts either a ContentVersionId or ContentDocumentId.
    * If a ContentDocumentId is given, resolves the latest published version first.
+   *
+   * When fieldDiscovery is provided, resolves the "latest version" boolean field
+   * dynamically (ADR-300). Falls back to CreatedDate ordering if not available.
    */
-  async downloadFile(id: string): Promise<{
+  async downloadFile(id: string, fieldDiscovery?: FieldDiscovery): Promise<{
     buffer: Buffer;
     filename: string;
     mimeType: string;
@@ -242,11 +251,15 @@ export class SalesforceClient {
     // If it looks like a ContentDocumentId, resolve the latest version
     const prefix = id.substring(0, 3);
     if (prefix === '069') {
-      // Use CreatedDate ordering instead of a "latest version" boolean field,
-      // which varies across orgs (IsLatestVersion vs IsLatest). See ADR-300.
+      // ADR-300: resolve the "latest version" boolean field dynamically.
+      // Falls back to CreatedDate ordering if discovery isn't available.
+      const latestField = fieldDiscovery?.resolveWellKnown('ContentVersion', 'isLatestVersion');
+      const latestFilter = latestField
+        ? `AND ${latestField} = true`
+        : 'ORDER BY CreatedDate DESC';
       const result = await this.conn.query(
         `SELECT Id, Title, FileExtension, ContentSize, FileType, ContentDocumentId ` +
-        `FROM ContentVersion WHERE ContentDocumentId = '${id}' ORDER BY CreatedDate DESC LIMIT 1`
+        `FROM ContentVersion WHERE ContentDocumentId = '${id}' ${latestFilter} LIMIT 1`
       );
       if (!result.records || result.records.length === 0) {
         throw new Error(`No ContentVersion found for ContentDocumentId: ${id}`);

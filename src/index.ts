@@ -32,12 +32,14 @@ import { handleDownloadFile } from './handlers/file-handlers.js';
 import { toolSchemas } from './schemas/tool-schemas.js';
 import { SessionCache } from './utils/session-cache.js';
 import { CacheMiddleware } from './utils/cache-middleware.js';
+import { FieldDiscovery } from './client/field-discovery.js';
 
 class SalesforceServer {
   private server: Server;
   private sfClient: SalesforceClient;
   private cache: SessionCache;
   private cacheMiddleware: CacheMiddleware;
+  private fieldDiscovery: FieldDiscovery;
 
   constructor() {
     console.error('Loading tool schemas...');
@@ -65,6 +67,7 @@ class SalesforceServer {
     this.sfClient.warmup();
     this.cache = new SessionCache();
     this.cacheMiddleware = new CacheMiddleware(this.cache);
+    this.fieldDiscovery = new FieldDiscovery(this.sfClient);
 
     this.setupHandlers();
     
@@ -89,16 +92,90 @@ class SalesforceServer {
       })),
     }));
 
-    this.server.setRequestHandler(ListResourcesRequestSchema, async () => ({
-      resources: [], // No resources provided by this server
-    }));
+    this.server.setRequestHandler(ListResourcesRequestSchema, async () => {
+      const resources: Array<{ uri: string; name: string; description: string; mimeType: string }> = [];
+
+      // Add field catalog resources for discovered objects
+      if (this.fieldDiscovery.ready) {
+        const stats = this.fieldDiscovery.getStats();
+        resources.push({
+          uri: 'salesforce://field-catalog/_stats',
+          name: 'Field Discovery Stats',
+          description: `Discovery status: ${stats.objectsDiscovered} objects, ${stats.totalPromoted} promoted fields`,
+          mimeType: 'application/json',
+        });
+
+        for (const objectName of ['Account', 'Opportunity', 'Contact', 'Lead', 'Contract', 'ContentVersion']) {
+          const catalog = this.fieldDiscovery.getCatalog(objectName);
+          if (catalog) {
+            resources.push({
+              uri: `salesforce://field-catalog/${objectName}`,
+              name: `${objectName} Field Catalog`,
+              description: `${catalog.promoted.length} promoted fields out of ${catalog.totalFields}`,
+              mimeType: 'application/json',
+            });
+          }
+        }
+      }
+
+      return { resources };
+    });
 
     this.server.setRequestHandler(ListResourceTemplatesRequestSchema, async () => ({
-      resourceTemplates: [], // No resource templates provided by this server
+      resourceTemplates: [{
+        uriTemplate: 'salesforce://field-catalog/{objectName}',
+        name: 'Field Catalog',
+        description: 'Promoted fields for a Salesforce object, ranked by usage and quality',
+        mimeType: 'application/json',
+      }],
     }));
 
     this.server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
-      throw new McpError(ErrorCode.InvalidRequest, `No resources available: ${request.params.uri}`);
+      const uri = request.params.uri;
+
+      // salesforce://field-catalog/_stats
+      if (uri === 'salesforce://field-catalog/_stats') {
+        const stats = this.fieldDiscovery.getStats();
+        return {
+          contents: [{ uri, mimeType: 'application/json', text: JSON.stringify(stats, null, 2) }],
+        };
+      }
+
+      // salesforce://field-catalog/{objectName}
+      const catalogMatch = uri.match(/^salesforce:\/\/field-catalog\/(\w+)$/);
+      if (catalogMatch) {
+        const objectName = catalogMatch[1];
+        // Try cached, or discover on-demand
+        let catalog = this.fieldDiscovery.getCatalog(objectName);
+        if (!catalog) {
+          catalog = await this.fieldDiscovery.discoverObject(objectName) ?? undefined;
+        }
+        if (!catalog) {
+          throw new McpError(ErrorCode.InvalidRequest, `Could not discover fields for: ${objectName}`);
+        }
+
+        const payload = {
+          objectName: catalog.objectName,
+          totalFields: catalog.totalFields,
+          totalRecords: catalog.totalRecords,
+          promoted: catalog.promoted.map(s => ({
+            name: s.field.name,
+            label: s.field.label,
+            type: s.field.type,
+            computationType: s.field.computationType,
+            custom: s.field.custom,
+            score: s.score,
+            populationPct: s.field.populationPct,
+            adjustments: s.adjustments.map(a => `${a.delta > 0 ? '+' : ''}${a.delta} ${a.reason}`),
+          })),
+          wellKnown: Object.fromEntries(catalog.wellKnown),
+        };
+        return {
+          contents: [{ uri, mimeType: 'application/json', text: JSON.stringify(payload, null, 2) }],
+        };
+      }
+
+      throw new McpError(ErrorCode.InvalidRequest, `Unknown resource: ${uri}`);
     });
 
     // Set up tool handlers
@@ -135,7 +212,7 @@ class SalesforceServer {
             return await handleGetUserInfo(this.sfClient);
 
           case 'download_file':
-            return await handleDownloadFile(this.sfClient, request.params.arguments);
+            return await handleDownloadFile(this.sfClient, request.params.arguments, this.fieldDiscovery);
 
           case 'list_objects':
             return await handleListObjects(this.sfClient, request.params.arguments);
@@ -190,9 +267,15 @@ class SalesforceServer {
 
     // Kick off Salesforce auth in the background — errors are logged
     // but don't crash the server; they'll surface on the first tool call.
-    this.sfClient.initialize().catch((err) => {
-      console.error(`Salesforce auth failed (will retry on first tool call): ${err.message}`);
-    });
+    this.sfClient.initialize()
+      .then(() => {
+        // After auth succeeds, start field discovery (ADR-300).
+        // Non-blocking — tools work immediately, discovery enriches over time.
+        this.fieldDiscovery.startAsync();
+      })
+      .catch((err) => {
+        console.error(`Salesforce auth failed (will retry on first tool call): ${err.message}`);
+      });
   }
 }
 

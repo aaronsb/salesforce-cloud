@@ -96,8 +96,13 @@ describe('field-type-map', () => {
       expect(info.validOperations).toEqual([]);
     });
 
-    it('should treat unknown types as text', () => {
+    it('should treat encryptedstring as binary', () => {
       const info = getComputationType('encryptedstring');
+      expect(info.computationType).toBe('binary');
+    });
+
+    it('should treat unknown types as text', () => {
+      const info = getComputationType('totallyFakeType');
       expect(info.computationType).toBe('text');
       expect(info.soqlNotes).toContain('Unknown SF field type');
     });
