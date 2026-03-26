@@ -33,6 +33,7 @@ import { toolSchemas } from './schemas/tool-schemas.js';
 import { SessionCache } from './utils/session-cache.js';
 import { CacheMiddleware } from './utils/cache-middleware.js';
 import { FieldDiscovery } from './client/field-discovery.js';
+import { CORE_OBJECTS } from './utils/discovery-constants.js';
 
 class SalesforceServer {
   private server: Server;
@@ -105,7 +106,7 @@ class SalesforceServer {
           mimeType: 'application/json',
         });
 
-        for (const objectName of ['Account', 'Opportunity', 'Contact', 'Lead', 'Contract', 'ContentVersion']) {
+        for (const objectName of CORE_OBJECTS) {
           const catalog = this.fieldDiscovery.getCatalog(objectName);
           if (catalog) {
             resources.push({
