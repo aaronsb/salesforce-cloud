@@ -1,5 +1,6 @@
 import { McpError, ErrorCode } from '@modelcontextprotocol/sdk/types.js';
 import { SalesforceClient } from '../client/salesforce-client.js';
+import type { FieldDiscovery } from '../client/field-discovery.js';
 import { saveToWorkspace, formatFileOutput } from '../utils/file-output.js';
 import { sanitizeFilename } from '../utils/workspace.js';
 import { getNextSteps } from '../utils/next-steps.js';
@@ -12,7 +13,7 @@ function isDownloadFileParams(obj: any): obj is DownloadFileParams {
   return typeof obj === 'object' && obj !== null && typeof obj.contentId === 'string';
 }
 
-export async function handleDownloadFile(client: SalesforceClient, args: any) {
+export async function handleDownloadFile(client: SalesforceClient, args: any, fieldDiscovery?: FieldDiscovery) {
   if (!isDownloadFileParams(args)) {
     throw new McpError(
       ErrorCode.InvalidParams,
@@ -28,7 +29,7 @@ export async function handleDownloadFile(client: SalesforceClient, args: any) {
     );
   }
 
-  const fileInfo = await client.downloadFile(args.contentId);
+  const fileInfo = await client.downloadFile(args.contentId, fieldDiscovery);
   const safeFilename = sanitizeFilename(fileInfo.filename);
   const result = await saveToWorkspace(safeFilename, fileInfo.buffer, fileInfo.mimeType);
 
