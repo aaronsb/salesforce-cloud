@@ -79,13 +79,12 @@ mcpb: build     ## Build .mcpb desktop extension bundle
 	@echo ""
 	@echo "Built: salesforce-cloud-mcp.mcpb ($$(du -h salesforce-cloud-mcp.mcpb | cut -f1))"
 
-publish-all: mcpb  ## Build MCPB, publish to MCP Registry + GitHub Release (npm via trusted publisher)
+publish-all: mcpb  ## Build MCPB, publish to MCP Registry (npm + GitHub Release via CI)
 	@echo ""
 	@echo "Publishing v$(VERSION):"
-	@echo "  - npm: automatic via GitHub Actions trusted publisher (triggered by tag push)"
+	@echo "  - npm: automatic via CI (triggered by tag push)"
+	@echo "  - GitHub Release + .mcpb: automatic via CI (triggered by tag push)"
 	@echo "  - MCP Registry: manual (below)"
-	@echo "  - GitHub Release: manual (below)"
-	@echo "  - MCPB bundle: already built"
 	@echo ""
 	@read -p "Continue? [y/N] " confirm && [ "$$confirm" = "y" ] || (echo "Aborted." && exit 1)
 	@echo ""
@@ -94,12 +93,12 @@ publish-all: mcpb  ## Build MCPB, publish to MCP Registry + GitHub Release (npm 
 	mcp-publisher publish server.json
 	@echo ""
 	@echo "── GitHub Release ──"
-	@read -p "Release notes (one line, or empty for default): " notes; \
-	if [ -z "$$notes" ]; then notes="Release v$(VERSION)"; fi; \
-	gh release create "v$(VERSION)" --title "v$(VERSION)" --notes "$$notes" salesforce-cloud-mcp.mcpb
+	@echo "Uploading .mcpb to existing release (created by CI)..."
+	gh release upload "v$(VERSION)" salesforce-cloud-mcp.mcpb --clobber 2>/dev/null || \
+		(echo "Release v$(VERSION) not found — CI may not have run yet. Creating..."; \
+		gh release create "v$(VERSION)" --title "v$(VERSION)" --notes "Release v$(VERSION)" salesforce-cloud-mcp.mcpb)
 	@echo ""
-	@echo "v$(VERSION) published. npm publishes automatically from the v$(VERSION) tag."
-	@echo "MCPB bundle: salesforce-cloud-mcp.mcpb"
+	@echo "v$(VERSION) published."
 
 help:           ## Show this help
 	@grep -E '^[a-z_-]+:.*##' $(MAKEFILE_LIST) | awk -F ':.*## ' '{printf "  %-16s %s\n", $$1, $$2}'
