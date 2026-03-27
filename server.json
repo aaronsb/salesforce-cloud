@@ -1,7 +1,7 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.aaronsb/salesforce-cloud",
-  "description": "MCP server for Salesforce CRM — manage opportunities, accounts, contacts, SOQL queries, and analytics",
+  "description": "Salesforce CRM integration — opportunities, accounts, SOQL, file downloads, analytics",
   "title": "Salesforce Cloud",
   "websiteUrl": "https://github.com/aaronsb/salesforce-cloud#readme",
   "repository": {
