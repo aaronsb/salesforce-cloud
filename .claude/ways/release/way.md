@@ -3,6 +3,7 @@ description: Release workflow — version bumping, npm publish, mcpb bundle, Git
 vocabulary: release publish version bump tag npm mcpb bundle deploy ship
 pattern: npm version|npm publish|make release|make publish|mcpb pack|gh release
 threshold: 2.0
+scope: agent, subagent
 ---
 # Release Workflow
 

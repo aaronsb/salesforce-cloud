@@ -3,6 +3,7 @@ description: Salesforce API integration patterns, custom fields, SOQL queries, A
 vocabulary: salesforce soql custom field __c object describe query opportunity account contact lead api limit bulk
 pattern: salesforce|soql|__c|jsforce
 threshold: 2.0
+scope: agent, subagent
 ---
 # Salesforce Integration
 
