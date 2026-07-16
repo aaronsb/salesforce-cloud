@@ -267,9 +267,11 @@ class SalesforceServer {
     await this.server.connect(transport);
     console.error('Salesforce MCP server running on stdio');
 
-    // Kick off Salesforce auth in the background — errors are logged
-    // but don't crash the server; they'll surface on the first tool call.
-    this.sfClient.initialize()
+    // Join the auth already kicked off by warmup() in the constructor rather
+    // than starting a second one — initialize() does not reuse the in-flight
+    // promise, so calling it here would log in to Salesforce twice per startup.
+    // Errors are logged but don't crash the server; they surface on first use.
+    this.sfClient.ensureInitialized()
       .then(() => {
         // After auth succeeds, start field discovery (ADR-300).
         // Non-blocking — tools work immediately, discovery enriches over time.
