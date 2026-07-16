@@ -421,6 +421,42 @@ describe('FieldDiscovery', () => {
     });
   });
 
+  describe('whenSettled', () => {
+    it('resolves once startup discovery has finished', async () => {
+      const { client } = makeClient({
+        describes: Object.fromEntries(CORE_OBJECTS.map(o => [o, [field({ name: 'Name' })]])),
+        counts: Object.fromEntries(CORE_OBJECTS.map(o => [o, 1])),
+      });
+      const discovery = new FieldDiscovery(client);
+
+      discovery.startAsync();
+      await discovery.whenSettled();
+
+      expect(discovery.ready).toBe(true);
+    });
+
+    // Callers wait on this to react to discovery landing. Discovery already
+    // logs and records its own failures, so rejecting here would force every
+    // caller to handle an error that has already been dealt with.
+    it('resolves rather than rejecting when discovery blows up', async () => {
+      const { client } = makeClient();
+      const discovery = new FieldDiscovery(client);
+      jest.spyOn(discovery as any, 'discoverCoreObjects').mockRejectedValue(new Error('boom'));
+
+      discovery.startAsync();
+
+      await expect(discovery.whenSettled()).resolves.toBeUndefined();
+    });
+
+    it('resolves immediately when discovery was never started', async () => {
+      const { client } = makeClient();
+      const discovery = new FieldDiscovery(client);
+
+      await expect(discovery.whenSettled()).resolves.toBeUndefined();
+      expect(discovery.ready).toBe(false);
+    });
+  });
+
   describe('global promotion budget', () => {
     it('caps promoted fields at the per-object maximum', async () => {
       const many = Array.from({ length: MAX_PROMOTED_PER_OBJECT + 20 }, (_, i) =>

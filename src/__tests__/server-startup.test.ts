@@ -93,4 +93,64 @@ describe('SalesforceServer startup', () => {
 
     expect(startAsync).not.toHaveBeenCalled();
   });
+
+  // The resource list is built before discovery can have run, so every catalog
+  // in it is described as "in progress". Clients cache that listing at connect
+  // and have no reason to refetch — without a notification the labels stay
+  // wrong for the whole session while the resources themselves read fine.
+  describe('resource list notification', () => {
+    it('tells clients to refetch once discovery settles', async () => {
+      const server = new SalesforceServer();
+      jest.spyOn(server['fieldDiscovery'], 'startAsync').mockImplementation(() => {});
+      jest.spyOn(server['fieldDiscovery'], 'whenSettled').mockResolvedValue(undefined);
+      const notify = jest.spyOn(server['server'], 'sendResourceListChanged').mockResolvedValue(undefined);
+
+      await server.startBackgroundInit();
+
+      expect(notify).toHaveBeenCalledTimes(1);
+    });
+
+    it('waits for discovery rather than announcing immediately', async () => {
+      const server = new SalesforceServer();
+      let settle: () => void = () => {};
+      jest.spyOn(server['fieldDiscovery'], 'startAsync').mockImplementation(() => {});
+      jest.spyOn(server['fieldDiscovery'], 'whenSettled')
+        .mockReturnValue(new Promise<void>(res => { settle = res; }));
+      const notify = jest.spyOn(server['server'], 'sendResourceListChanged').mockResolvedValue(undefined);
+
+      const init = server.startBackgroundInit();
+      await new Promise(process.nextTick);
+      expect(notify).not.toHaveBeenCalled();
+
+      settle();
+      await init;
+      expect(notify).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not announce when auth failed and discovery never ran', async () => {
+      conn.login.mockRejectedValue(new Error('bad credentials'));
+      const server = new SalesforceServer();
+      const notify = jest.spyOn(server['server'], 'sendResourceListChanged').mockResolvedValue(undefined);
+
+      await server.startBackgroundInit();
+
+      expect(notify).not.toHaveBeenCalled();
+    });
+
+    it('survives a client that has gone away', async () => {
+      const server = new SalesforceServer();
+      jest.spyOn(server['fieldDiscovery'], 'startAsync').mockImplementation(() => {});
+      jest.spyOn(server['fieldDiscovery'], 'whenSettled').mockResolvedValue(undefined);
+      jest.spyOn(server['server'], 'sendResourceListChanged')
+        .mockRejectedValue(new Error('Not connected'));
+
+      await expect(server.startBackgroundInit()).resolves.toBeUndefined();
+    });
+
+    it('declares the listChanged capability so clients act on the notification', () => {
+      const server = new SalesforceServer();
+
+      expect(server['server']['_capabilities'].resources).toMatchObject({ listChanged: true });
+    });
+  });
 });

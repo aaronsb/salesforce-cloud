@@ -71,6 +71,19 @@ export class FieldDiscovery {
     });
   }
 
+  /**
+   * Resolves when startup discovery has settled — succeeded, or failed in a way
+   * the catalog has already absorbed. Never rejects: callers wait on this to
+   * react to discovery finishing, and a rejection would make them handle an
+   * error the discovery pipeline itself already logged and recorded in stats.
+   *
+   * Resolves immediately if startAsync() was never called; there is nothing to
+   * wait for. Call startAsync() first.
+   */
+  whenSettled(): Promise<void> {
+    return this.startupPromise ? this.startupPromise.catch(() => {}) : Promise.resolve();
+  }
+
   /** Get the catalog for an object (returns undefined if not yet discovered). */
   getCatalog(objectName: string): ObjectCatalog | undefined {
     return this.catalogs.get(objectName);

@@ -62,7 +62,12 @@ class SalesforceServer {
       {
         capabilities: {
           tools: {},
-          resources: {},
+          // listChanged: the resource list is built before discovery has run
+          // (the transport connects first), so every description in it starts
+          // out saying "in progress". Clients cache that listing at connect and
+          // have no reason to refetch, so without this the labels stay wrong for
+          // the whole session while the resources themselves read fine.
+          resources: { listChanged: true },
         },
       }
     );
@@ -294,6 +299,21 @@ class SalesforceServer {
   }
 
   /**
+   * Notify clients that the resource list is worth refetching.
+   *
+   * Best-effort: this fires from a background chain after discovery settles, and
+   * a client that has already gone away must not turn a cosmetic refresh into an
+   * unhandled rejection that takes the server with it.
+   */
+  private async announceResourceChange(): Promise<void> {
+    try {
+      await this.server.sendResourceListChanged();
+    } catch (err: any) {
+      console.error(`Could not notify clients of resource changes: ${err?.message ?? err}`);
+    }
+  }
+
+  /**
    * Wait on the auth the constructor's warmup() already started, then kick off
    * field discovery. Separate from run() so it can be tested without binding
    * stdio — the double-login bug lived here and shipped unnoticed.
@@ -308,6 +328,9 @@ class SalesforceServer {
         // After auth succeeds, start field discovery (ADR-300).
         // Non-blocking — tools work immediately, discovery enriches over time.
         this.fieldDiscovery.startAsync();
+        // Tell clients to refetch once discovery lands. The list they cached at
+        // connect describes every catalog as "in progress", because it was.
+        return this.fieldDiscovery.whenSettled().then(() => this.announceResourceChange());
       })
       .catch((err) => {
         console.error(`Salesforce auth failed (will retry on first tool call): ${err.message}`);
