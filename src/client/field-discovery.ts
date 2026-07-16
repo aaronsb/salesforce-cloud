@@ -72,16 +72,23 @@ export class FieldDiscovery {
   }
 
   /**
-   * Resolves when startup discovery has settled — succeeded, or failed in a way
-   * the catalog has already absorbed. Never rejects: callers wait on this to
-   * react to discovery finishing, and a rejection would make them handle an
-   * error the discovery pipeline itself already logged and recorded in stats.
+   * Wait for startup discovery to settle. Resolves `true` once it has run —
+   * whether it succeeded or failed in a way the catalog already absorbed — and
+   * `false` if it was never started, in which case there was nothing to wait
+   * for and nothing has changed.
    *
-   * Resolves immediately if startAsync() was never called; there is nothing to
-   * wait for. Call startAsync() first.
+   * The boolean is the point. Callers wait on this to react to discovery
+   * *landing*; a bare `Promise<void>` that resolves immediately when
+   * `startAsync()` was never called is indistinguishable from "discovery
+   * finished", so a caller would act on a state change that never happened.
+   *
+   * Never rejects: discovery logs its own failures and records them in stats,
+   * so re-raising here would force every caller to handle an error that has
+   * already been dealt with.
    */
-  whenSettled(): Promise<void> {
-    return this.startupPromise ? this.startupPromise.catch(() => {}) : Promise.resolve();
+  whenSettled(): Promise<boolean> {
+    if (!this.startupPromise) return Promise.resolve(false);
+    return this.startupPromise.then(() => true, () => true);
   }
 
   /** Get the catalog for an object (returns undefined if not yet discovered). */

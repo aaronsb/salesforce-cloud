@@ -102,7 +102,7 @@ describe('SalesforceServer startup', () => {
     it('tells clients to refetch once discovery settles', async () => {
       const server = new SalesforceServer();
       jest.spyOn(server['fieldDiscovery'], 'startAsync').mockImplementation(() => {});
-      jest.spyOn(server['fieldDiscovery'], 'whenSettled').mockResolvedValue(undefined);
+      jest.spyOn(server['fieldDiscovery'], 'whenSettled').mockResolvedValue(true);
       const notify = jest.spyOn(server['server'], 'sendResourceListChanged').mockResolvedValue(undefined);
 
       await server.startBackgroundInit();
@@ -112,19 +112,55 @@ describe('SalesforceServer startup', () => {
 
     it('waits for discovery rather than announcing immediately', async () => {
       const server = new SalesforceServer();
-      let settle: () => void = () => {};
+      let settle: (ran: boolean) => void = () => {};
       jest.spyOn(server['fieldDiscovery'], 'startAsync').mockImplementation(() => {});
       jest.spyOn(server['fieldDiscovery'], 'whenSettled')
-        .mockReturnValue(new Promise<void>(res => { settle = res; }));
+        .mockReturnValue(new Promise<boolean>(res => { settle = res; }));
       const notify = jest.spyOn(server['server'], 'sendResourceListChanged').mockResolvedValue(undefined);
 
       const init = server.startBackgroundInit();
       await new Promise(process.nextTick);
       expect(notify).not.toHaveBeenCalled();
 
-      settle();
+      settle(true);
       await init;
       expect(notify).toHaveBeenCalledTimes(1);
+    });
+
+    // startBackgroundInit()'s promise must cover the announcement, not merely
+    // trigger it: run() and the tests both treat "init resolved" as "startup
+    // is done". Severing the chain (`void` instead of `return`) left both
+    // tests above passing on microtask ordering alone.
+    it('does not resolve until the announcement has completed', async () => {
+      const server = new SalesforceServer();
+      let finishNotify: () => void = () => {};
+      jest.spyOn(server['fieldDiscovery'], 'startAsync').mockImplementation(() => {});
+      jest.spyOn(server['fieldDiscovery'], 'whenSettled').mockResolvedValue(true);
+      jest.spyOn(server['server'], 'sendResourceListChanged')
+        .mockReturnValue(new Promise<void>(res => { finishNotify = res; }));
+
+      let resolved = false;
+      const init = server.startBackgroundInit().then(() => { resolved = true; });
+
+      await new Promise(process.nextTick);
+      expect(resolved).toBe(false);
+
+      finishNotify();
+      await init;
+      expect(resolved).toBe(true);
+    });
+
+    // whenSettled() reports whether discovery ran. Announcing a change that
+    // never happened would send clients to refetch an identical list.
+    it('does not announce when discovery was never started', async () => {
+      const server = new SalesforceServer();
+      jest.spyOn(server['fieldDiscovery'], 'startAsync').mockImplementation(() => {});
+      const notify = jest.spyOn(server['server'], 'sendResourceListChanged').mockResolvedValue(undefined);
+
+      // startAsync stubbed out, so whenSettled() reports false for real.
+      await server.startBackgroundInit();
+
+      expect(notify).not.toHaveBeenCalled();
     });
 
     it('does not announce when auth failed and discovery never ran', async () => {
@@ -140,7 +176,7 @@ describe('SalesforceServer startup', () => {
     it('survives a client that has gone away', async () => {
       const server = new SalesforceServer();
       jest.spyOn(server['fieldDiscovery'], 'startAsync').mockImplementation(() => {});
-      jest.spyOn(server['fieldDiscovery'], 'whenSettled').mockResolvedValue(undefined);
+      jest.spyOn(server['fieldDiscovery'], 'whenSettled').mockResolvedValue(true);
       jest.spyOn(server['server'], 'sendResourceListChanged')
         .mockRejectedValue(new Error('Not connected'));
 

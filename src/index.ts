@@ -330,7 +330,9 @@ class SalesforceServer {
         this.fieldDiscovery.startAsync();
         // Tell clients to refetch once discovery lands. The list they cached at
         // connect describes every catalog as "in progress", because it was.
-        return this.fieldDiscovery.whenSettled().then(() => this.announceResourceChange());
+        // Only announce if discovery actually ran — nothing to refetch otherwise.
+        return this.fieldDiscovery.whenSettled()
+          .then(ran => (ran ? this.announceResourceChange() : undefined));
       })
       .catch((err) => {
         console.error(`Salesforce auth failed (will retry on first tool call): ${err.message}`);

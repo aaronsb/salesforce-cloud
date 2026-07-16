@@ -31,6 +31,24 @@ describe('tool schemas', () => {
     it('points at the field catalog as the cheaper route', () => {
       expect(description).toContain('salesforce://field-catalog/');
     });
+
+    // The catalog is a usage filter, not a field list — standard fields are
+    // absent by design (ADR-300). Naming it as the answer to "what can I
+    // select?" without that caveat invites the reader to conclude anything
+    // missing is unavailable, which is false. Every other surface that names
+    // the catalog carries this hedge; the tool description is read before
+    // every call, so it needs it most.
+    it('does not imply the catalog is the complete set of queryable fields', () => {
+      expect(description).toMatch(/standard fields remain queryable/i);
+    });
+
+    // A tool description is a promise made before the agent can check it.
+    // These were once asserted flatly and were false for any non-core object,
+    // and false for every object during the startup discovery window.
+    it('does not promise behaviour the server only sometimes delivers', () => {
+      expect(description).not.toMatch(/results carry/i);
+      expect(description).not.toMatch(/reports the fields that do/i);
+    });
   });
 
   describe('describe_object', () => {

@@ -430,8 +430,8 @@ describe('FieldDiscovery', () => {
       const discovery = new FieldDiscovery(client);
 
       discovery.startAsync();
-      await discovery.whenSettled();
 
+      await expect(discovery.whenSettled()).resolves.toBe(true);
       expect(discovery.ready).toBe(true);
     });
 
@@ -445,14 +445,16 @@ describe('FieldDiscovery', () => {
 
       discovery.startAsync();
 
-      await expect(discovery.whenSettled()).resolves.toBeUndefined();
+      await expect(discovery.whenSettled()).resolves.toBe(true);
     });
 
-    it('resolves immediately when discovery was never started', async () => {
+    // A bare resolve() here would be indistinguishable from "discovery
+    // finished", and a caller would act on a state change that never happened.
+    it('reports false when discovery was never started', async () => {
       const { client } = makeClient();
       const discovery = new FieldDiscovery(client);
 
-      await expect(discovery.whenSettled()).resolves.toBeUndefined();
+      await expect(discovery.whenSettled()).resolves.toBe(false);
       expect(discovery.ready).toBe(false);
     });
   });
