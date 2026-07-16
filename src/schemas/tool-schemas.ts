@@ -290,7 +290,7 @@ export const toolSchemas = {
   },
   execute_soql: {
     name: 'execute_soql',
-    description: 'Execute a SOQL query. Supports querying both standard and custom fields (custom fields end with __c in their API names). Use describe_object first to discover available fields.',
+    description: 'Execute a SOQL query. Supports both standard and custom fields (custom fields end with __c in their API names). To see which fields this org actually populates on an object, read the `salesforce://field-catalog/{objectName}` resource — it is ranked, far smaller than a full schema, and works for any object. That catalog is a usage filter rather than a field list: standard fields remain queryable whether or not they appear in it. Use describe_object when you want an object\'s complete schema.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -317,7 +317,7 @@ export const toolSchemas = {
   },
   describe_object: {
     name: 'describe_object',
-    description: 'Get metadata about a Salesforce object, including both standard and custom fields when includeFields is true. Use this to discover available fields and their API names, especially useful for finding custom fields (ending in __c)',
+    description: 'Get an object\'s full metadata, including every standard and custom field when includeFields is true. Returns the complete schema — exhaustive but unranked, and large on customised objects. To find out which fields this org actually populates, read `salesforce://field-catalog/{objectName}` instead; it is ranked and far smaller.',
     inputSchema: {
       type: 'object',
       properties: {
