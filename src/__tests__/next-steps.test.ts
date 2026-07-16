@@ -81,11 +81,18 @@ describe('getNextSteps', () => {
   // ---- SOQL and generic tools ----
 
   describe('execute_soql', () => {
-    it('should suggest discovery and CRUD tools', () => {
+    it('should suggest refining the query and acting on results', () => {
       const result = getNextSteps('execute_soql');
-      expect(result).toContain('`describe_object`');
+      expect(result).toContain('`execute_soql`');
       expect(result).toContain('`get_opportunity_details`');
       expect(result).toContain('`create_record`');
+    });
+
+    // The recon round-trip field discovery (ADR-300) exists to eliminate.
+    // Ranked fields ride along with the response, so a successful query must
+    // never send the agent back to describe the object it just queried.
+    it('should not send the agent back to describe_object', () => {
+      expect(getNextSteps('execute_soql')).not.toContain('`describe_object`');
     });
   });
 
@@ -94,16 +101,20 @@ describe('getNextSteps', () => {
       const result = getNextSteps('describe_object', { objectName: 'Account' });
       expect(result).toContain('`execute_soql`');
       expect(result).toContain('`create_record`');
-      expect(result).toContain('`list_objects`');
       expect(result).toContain('Account');
+    });
+
+    it('should point at the ranked field catalog for the described object', () => {
+      const result = getNextSteps('describe_object', { objectName: 'Account' });
+      expect(result).toContain('salesforce://field-catalog/Account/all');
     });
   });
 
   describe('list_objects', () => {
-    it('should suggest describe and query', () => {
+    it('should suggest querying and point at the field catalog', () => {
       const result = getNextSteps('list_objects');
-      expect(result).toContain('`describe_object`');
       expect(result).toContain('`execute_soql`');
+      expect(result).toContain('salesforce://field-catalog/');
     });
   });
 
@@ -112,17 +123,25 @@ describe('getNextSteps', () => {
       const result = getNextSteps('create_record', { objectName: 'Account', id: '001NEW' });
       expect(result).toContain('`execute_soql`');
       expect(result).toContain('`update_record`');
-      expect(result).toContain('`describe_object`');
       expect(result).toContain('001NEW');
+    });
+
+    it('should not send the agent back to describe_object', () => {
+      const result = getNextSteps('create_record', { objectName: 'Account', id: '001NEW' });
+      expect(result).not.toContain('`describe_object`');
     });
   });
 
   describe('update_record', () => {
-    it('should suggest viewing and describing', () => {
+    it('should suggest viewing the updated record', () => {
       const result = getNextSteps('update_record', { objectName: 'Contact', id: '003UPD' });
       expect(result).toContain('`execute_soql`');
-      expect(result).toContain('`describe_object`');
       expect(result).toContain('003UPD');
+    });
+
+    it('should not send the agent back to describe_object', () => {
+      const result = getNextSteps('update_record', { objectName: 'Contact', id: '003UPD' });
+      expect(result).not.toContain('`describe_object`');
     });
   });
 

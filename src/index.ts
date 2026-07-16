@@ -34,6 +34,7 @@ import { SessionCache } from './utils/session-cache.js';
 import { CacheMiddleware } from './utils/cache-middleware.js';
 import { FieldDiscovery } from './client/field-discovery.js';
 import type { ScoredField } from './utils/field-regulator.js';
+import { buildInvalidFieldHint } from './utils/field-hints.js';
 import { CORE_OBJECTS } from './utils/discovery-constants.js';
 import { VERSION } from './version.js';
 
@@ -220,7 +221,7 @@ class SalesforceServer {
             return await handleAnalyze(this.sfClient, request.params.arguments);
 
           case 'execute_soql':
-            return await handleExecuteSOQL(this.sfClient, request.params.arguments, this.cache);
+            return await handleExecuteSOQL(this.sfClient, request.params.arguments, this.cache, this.fieldDiscovery);
 
           case 'describe_object':
             return await handleDescribeObject(this.sfClient, request.params.arguments, this.cacheMiddleware);
@@ -275,8 +276,14 @@ class SalesforceServer {
         }
         // For Salesforce API errors, return as text content — not MCP errors
         const message = error instanceof Error ? error.message : String(error);
+        // If the call failed on a field that doesn't exist, name the fields
+        // that do (ADR-300). Without this the agent's only recourse is to go
+        // describe the object — the recon round-trip discovery exists to avoid.
+        const fieldHint = buildInvalidFieldHint(this.fieldDiscovery, message);
+        const guidance = fieldHint ||
+          '\n\nThis may be due to insufficient API permissions, disabled features, or fields not available on this org.';
         return {
-          content: [{ type: 'text', text: `**Request failed:** ${message}\n\nThis may be due to insufficient API permissions, disabled features, or fields not available on this org.` }],
+          content: [{ type: 'text', text: `**Request failed:** ${message}${guidance}` }],
           isError: true,
         };
       }

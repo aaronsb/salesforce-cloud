@@ -82,5 +82,50 @@ describe('Query Handlers', () => {
         { pageSize: 10, pageNumber: 2 }
       );
     });
+
+    // ADR-300: the ranked catalog rides along with the result so the agent can
+    // write its next query without a describe_object round-trip.
+    describe('field hints', () => {
+      const catalogSource = {
+        getCatalog: (name: string) => name === 'Account' ? {
+          objectName: 'Account',
+          fields: [],
+          promoted: [{
+            field: {
+              name: 'Industry', label: 'Industry', type: 'string', custom: false,
+              helpText: null, nillable: true, computationType: 'text' as const,
+            },
+            score: 90, adjustments: [], promoted: true,
+          }],
+          wellKnown: new Map(),
+          describeMs: 1, scoringMs: 1, totalFields: 87, totalRecords: 100,
+        } : undefined,
+      };
+
+      it('appends the ranked fields for the queried object', async () => {
+        const result = await handleExecuteSOQL(
+          mockClient, { query: 'SELECT Id FROM Account' }, undefined, catalogSource,
+        );
+
+        expect(result.content[0].text).toContain('Account fields ranked by usage (1 of 87)');
+        expect(result.content[0].text).toContain('Industry');
+        expect(result.content[0].text).toContain('salesforce://field-catalog/Account/all');
+      });
+
+      it('omits hints for an object that has not been discovered', async () => {
+        const result = await handleExecuteSOQL(
+          mockClient, { query: 'SELECT Id FROM Unknown__c' }, undefined, catalogSource,
+        );
+
+        expect(result.content[0].text).not.toContain('ranked by usage');
+      });
+
+      it('works without a catalog source at all', async () => {
+        const result = await handleExecuteSOQL(mockClient, { query: 'SELECT Id FROM Account' });
+
+        expect(result.content[0].text).toContain('Query Results');
+        expect(result.content[0].text).not.toContain('ranked by usage');
+      });
+    });
   });
 });
