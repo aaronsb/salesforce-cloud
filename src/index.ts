@@ -293,19 +293,17 @@ class SalesforceServer {
     });
   }
 
-  async run() {
-    // Connect MCP transport FIRST so the handshake completes immediately.
-    // Salesforce auth happens lazily on the first tool call — if it fails
-    // or hangs, it shouldn't block the MCP initialize/capabilities exchange.
-    const transport = new StdioServerTransport();
-    await this.server.connect(transport);
-    console.error('Salesforce MCP server running on stdio');
-
+  /**
+   * Wait on the auth the constructor's warmup() already started, then kick off
+   * field discovery. Separate from run() so it can be tested without binding
+   * stdio — the double-login bug lived here and shipped unnoticed.
+   */
+  startBackgroundInit(): Promise<void> {
     // Join the auth already kicked off by warmup() in the constructor rather
     // than starting a second one — initialize() does not reuse the in-flight
     // promise, so calling it here would log in to Salesforce twice per startup.
     // Errors are logged but don't crash the server; they surface on first use.
-    this.sfClient.ensureInitialized()
+    return this.sfClient.ensureInitialized()
       .then(() => {
         // After auth succeeds, start field discovery (ADR-300).
         // Non-blocking — tools work immediately, discovery enriches over time.
@@ -315,7 +313,24 @@ class SalesforceServer {
         console.error(`Salesforce auth failed (will retry on first tool call): ${err.message}`);
       });
   }
+
+  async run() {
+    // Connect MCP transport FIRST so the handshake completes immediately.
+    // Salesforce auth happens lazily on the first tool call — if it fails
+    // or hangs, it shouldn't block the MCP initialize/capabilities exchange.
+    const transport = new StdioServerTransport();
+    await this.server.connect(transport);
+    console.error('Salesforce MCP server running on stdio');
+
+    this.startBackgroundInit();
+  }
 }
 
-const server = new SalesforceServer();
-server.run().catch(console.error);
+export { SalesforceServer };
+
+// Only start a server when run as the entrypoint, so tests can import the
+// class without binding stdio or opening a Salesforce connection.
+if (require.main === module) {
+  const server = new SalesforceServer();
+  server.run().catch(console.error);
+}
