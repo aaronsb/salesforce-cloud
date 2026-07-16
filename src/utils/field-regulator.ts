@@ -21,6 +21,8 @@ export interface FieldCandidate {
   computationType: ComputationType;
   /** Population percentage (0-100), undefined if not scored. */
   populationPct?: number;
+  /** Active picklist values, for categorical fields. Undefined otherwise. */
+  picklistValues?: string[];
 }
 
 export interface ScoreAdjustment {

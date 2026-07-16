@@ -96,6 +96,11 @@ export class FieldDiscovery {
     return this.catalogs.get(objectName);
   }
 
+  /** All discovered catalogs, for surfaces that search across objects (ADR-302). */
+  allCatalogs(): ObjectCatalog[] {
+    return [...this.catalogs.values()];
+  }
+
   /** Resolve a well-known semantic field name to its actual API name on this org. */
   resolveWellKnown(objectName: string, semantic: string): string | undefined {
     return this.catalogs.get(objectName)?.wellKnown.get(semantic);
@@ -176,6 +181,13 @@ export class FieldDiscovery {
       helpText: f.inlineHelpText || null,
       nillable: f.nillable,
       computationType: getComputationType(f.type).computationType,
+      // Picklist values ride along on the describe we already fetched — no extra
+      // API cost. Kept so field search (ADR-302) can answer "what values does
+      // this field take?" in the same call that finds it. Active values only:
+      // inactive ones can't appear in a WHERE clause the agent would write next.
+      picklistValues: Array.isArray(f.picklistValues) && f.picklistValues.length > 0
+        ? f.picklistValues.filter((p: any) => p?.active !== false).map((p: any) => p.value)
+        : undefined,
     }));
 
     // 3. Population scoring
