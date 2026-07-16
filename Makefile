@@ -33,7 +33,7 @@ watch:          ## Watch mode for development
 # ── Version & Release ───────────────────────────────────────────────────
 
 version-sync:   ## Sync version from package.json to server.json and manifests
-	@echo "Syncing version $(VERSION) to server.json, manifest.json, mcpb/manifest.json"
+	@echo "Syncing version $(VERSION) to server.json, manifest.json, mcpb/manifest.json, src/version.ts"
 	node scripts/version-sync.cjs
 
 release-patch: check  ## Bump patch, sync, commit, tag, push
@@ -56,8 +56,20 @@ release-major: check  ## Bump major, sync, commit, tag, push
 
 _release-commit:
 	$(eval NEW_VERSION := $(shell node -p 'require("./package.json").version'))
-	git add package.json package-lock.json server.json manifest.json mcpb/manifest.json
+	git add package.json package-lock.json server.json manifest.json mcpb/manifest.json src/version.ts
 	git commit -m "chore: release v$(NEW_VERSION)"
+	# Assert the COMMITTED tree carries the bump — the tag is what triggers
+	# publishing, so what matters is the tree the tag points at, not the working
+	# tree. `make check` can't see this: it reads the working tree, which is in
+	# sync even when a version file was left out of the commit. That is exactly
+	# how the server shipped 0.2.0 while package.json said 0.5.0.
+	@for f in server.json manifest.json mcpb/manifest.json; do \
+	  git show HEAD:$$f | grep -q '"version": "$(NEW_VERSION)"' \
+	    || { echo "FATAL: release commit has stale version in $$f — not tagging"; exit 1; }; \
+	done
+	@git show HEAD:src/version.ts | grep -q "VERSION = '$(NEW_VERSION)'" \
+	  || { echo "FATAL: release commit has stale version in src/version.ts — not tagging"; exit 1; }
+	@echo "Verified: release commit reports v$(NEW_VERSION) everywhere"
 	git tag -a "v$(NEW_VERSION)" -m "v$(NEW_VERSION)"
 	git push && git push --tags
 	@echo ""
