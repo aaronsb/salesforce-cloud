@@ -59,6 +59,10 @@ const originalFetch = global.fetch;
 
 beforeEach(() => {
   errSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+  // clearAllMocks() resets call counts but not implementations, so a
+  // mockRejectedValue in one test would otherwise leak into the next.
+  conn.login.mockReset().mockResolvedValue(undefined);
+  conn.authorize.mockReset().mockResolvedValue(undefined);
   process.env = {
     ...originalEnv,
     SF_CLIENT_ID: 'test-client-id',
@@ -483,6 +487,42 @@ describe('SalesforceClient auth lifecycle', () => {
     await new Promise(process.nextTick);
 
     expect(conn.login).toHaveBeenCalledTimes(1);
+  });
+
+  // A failed warmup leaves several callers parked on the same rejected promise.
+  // Each must not launch its own retry: an org can read a burst of failed
+  // logins as a credential attack and lock the account.
+  it('retries once across concurrent callers, not once per caller', async () => {
+    conn.login.mockRejectedValueOnce(new Error('transient failure'));
+    conn.describeGlobal.mockResolvedValue({ sobjects: [] });
+    const client = new SalesforceClient();
+
+    client.warmup();
+    await Promise.all([
+      client.ensureInitialized(),
+      client.ensureInitialized(),
+      client.ensureInitialized(),
+      client.ensureInitialized(),
+    ]);
+
+    // One failed warmup login + exactly one shared retry.
+    expect(conn.login).toHaveBeenCalledTimes(2);
+  });
+
+  it('surfaces the error to every caller when the retry also fails', async () => {
+    conn.login.mockRejectedValue(new Error('bad credentials'));
+    const client = new SalesforceClient();
+
+    client.warmup();
+    const results = await Promise.allSettled([
+      client.ensureInitialized(),
+      client.ensureInitialized(),
+      client.ensureInitialized(),
+    ]);
+
+    expect(results.every(r => r.status === 'rejected')).toBe(true);
+    // One warmup + one shared retry — it must not keep retrying per caller.
+    expect(conn.login).toHaveBeenCalledTimes(2);
   });
 
   it('advises a My Domain URL when client credentials are used against login.salesforce.com', async () => {

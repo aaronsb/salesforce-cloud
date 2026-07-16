@@ -51,17 +51,25 @@ export class SalesforceClient {
     return this.conn;
   }
 
-  /** Ensure authenticated before making API calls. Safe to call multiple times. */
+  /**
+   * Ensure authenticated before making API calls. Safe to call concurrently.
+   *
+   * Retries once if the in-flight auth fails, but only one caller re-issues the
+   * login. initialize() clears initPromise when it fails, so a plain
+   * retry-in-catch would fire once per parked caller — K waiters on a rejected
+   * promise meant K concurrent logins, which an org can read as a credential
+   * attack. Re-reading initPromise each pass means the first caller to resume
+   * installs the retry and the rest await it.
+   */
   async ensureInitialized() {
-    if (!this.initPromise) {
-      this.initPromise = this.initialize();
-    }
-    try {
-      await this.initPromise;
-    } catch {
-      // initPromise was nulled by initialize() on failure; retry
-      this.initPromise = this.initialize();
-      await this.initPromise;
+    for (let attempt = 0; ; attempt++) {
+      const inFlight = this.initPromise ?? (this.initPromise = this.initialize());
+      try {
+        await inFlight;
+        return;
+      } catch (err) {
+        if (attempt >= 1) throw err;
+      }
     }
   }
 
