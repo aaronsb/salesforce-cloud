@@ -8,10 +8,30 @@ A single `git tag` push triggers two CI workflows:
 
 | Workflow | File | What it does |
 |----------|------|-------------|
-| **Publish to npm** | `.github/workflows/npm-publish.yml` | Builds, publishes to npm with provenance |
+| **Publish to npm** | `.github/workflows/npm-publish.yml` | Builds, publishes to npm with provenance, verifies the registry serves the tag |
 | **Build .mcpb** | `.github/workflows/release-mcpb.yml` | Builds .mcpb bundle, attaches to GitHub Release |
 
 Both npm and mcpb publishing start from the same `v*` tag.
+
+### npm auth: trusted publishing, not a token
+
+`npm-publish.yml` authenticates by exchanging the workflow's OIDC identity for a
+short-lived credential. There is no `NPM_TOKEN`, deliberately: a token would take
+precedence over OIDC, and a token is a credential that rots. The previous one
+expired in June and the publish job failed silently for a month — nothing was
+released in between, and the `.mcpb` job kept succeeding beside it, so the
+release looked done. v0.6.0 and v0.7.0 both had to be published by hand.
+
+This needs a **trusted publisher configured on npmjs.com** for the package,
+naming this repository and `npm-publish.yml`. It is account configuration, not
+repo configuration — it does not live in git, so it is worth knowing it exists:
+
+> npmjs.com → the package → Settings → Trusted Publisher → GitHub Actions →
+> repository `aaronsb/salesforce-cloud`, workflow `npm-publish.yml`
+
+Two guards exist because this failure is quiet by nature: the job asserts the
+registry actually serves the tagged version after publishing, and `make
+release-*` refuses to tag if the release commit's version files disagree.
 
 ## Release Flow
 
@@ -37,7 +57,10 @@ If `make check` fails, fix it first. Don't skip the check.
 
 ### 3. Publish to MCP Registry (manual)
 
-The npm publish and .mcpb GitHub Release are automated by CI. The MCP Registry publish is manual:
+The npm publish and .mcpb GitHub Release are automated by CI — but check that
+the npm job actually went green (`gh run list --limit 3`) rather than assuming.
+It is a separate workflow from the tag push and fails quietly. The MCP Registry
+publish is manual:
 
 ```bash
 make publish-all    # builds .mcpb locally, publishes to MCP Registry, creates GitHub Release

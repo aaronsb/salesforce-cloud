@@ -12,7 +12,7 @@ jobs:
 
     permissions:
       contents: read
-      id-token: write
+      id-token: write # trusted publishing (OIDC) and provenance
 
     steps:
       - uses: actions/checkout@v4
@@ -24,13 +24,47 @@ jobs:
           cache: 'npm'
           registry-url: 'https://registry.npmjs.org'
 
+      # Node 22 bundles npm 10.x, which predates trusted publishing — it ignores
+      # OIDC and looks for a token instead. Trusted publishing needs npm 11.5.1+.
+      - name: Upgrade npm to a version that supports trusted publishing
+        run: npm install -g npm@latest
+
       - name: Install dependencies
         run: npm ci
 
       - name: Build
         run: npm run build
 
+      # No NODE_AUTH_TOKEN. This publishes via trusted publishing, exchanging
+      # the workflow's OIDC identity for a short-lived credential — a token, if
+      # present, would take precedence and defeat it.
+      #
+      # Requires a trusted publisher configured on npmjs.com for this package,
+      # naming this repository and this workflow file. Without that, publish
+      # fails on auth.
+      #
+      # This is what bit v0.6.0 and v0.7.0: NPM_TOKEN expired in June and the
+      # job failed silently for a month, because nothing was released in
+      # between. A token is a credential that rots; OIDC is one that doesn't.
       - name: Publish to npm
         run: npm publish --provenance --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      # A failed publish is easy to miss: it lives in a different workflow from
+      # the tag push, and the .mcpb release succeeds beside it, so the release
+      # looks done. Assert the registry actually serves the tagged version
+      # rather than trusting the step above not to quietly no-op.
+      - name: Verify the registry serves this version
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          PKG=$(node -p 'require("./package.json").name')
+          for i in 1 2 3 4 5; do
+            PUBLISHED=$(npm view "$PKG@$TAG" version 2>/dev/null || true)
+            if [ "$PUBLISHED" = "$TAG" ]; then
+              echo "npm serves $PKG@$TAG"
+              exit 0
+            fi
+            echo "registry has not caught up (attempt $i/5), waiting..."
+            sleep 10
+          done
+          echo "FATAL: npm does not serve $PKG@$TAG after a reported-successful publish"
+          exit 1
