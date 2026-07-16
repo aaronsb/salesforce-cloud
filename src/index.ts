@@ -114,7 +114,11 @@ class SalesforceServer {
         name: 'Field Discovery Stats',
         description: stats.ready
           ? `Discovery status: ${stats.objectsDiscovered} objects, ${stats.totalPromoted} promoted fields`
-          : 'Discovery status: in progress',
+          // Progress, not a bare "wait": a caller deciding whether to block or
+          // fall back needs to know how much is left (ADR-301).
+          : `Discovery status: in progress — ${stats.objectsExpected - stats.pendingObjects.length}` +
+            `/${stats.objectsExpected} objects` +
+            (stats.etaMs !== undefined ? `, ~${Math.ceil(stats.etaMs / 1000)}s remaining` : ''),
         mimeType: 'application/json',
       }];
 
@@ -194,6 +198,16 @@ class SalesforceServer {
           custom: s.field.custom,
           score: s.score,
           populationPct: s.field.populationPct,
+          // "47%, falling" and "93%, flat" are different facts about a field,
+          // and only one is worth acting on. A single density number cannot
+          // tell them apart (ADR-301).
+          ...(s.field.trend ? { trend: s.field.trend.direction, trendPp: s.field.trend.deltaPp } : {}),
+          // The evidence behind the trend, oldest window first. This is the
+          // Tier 2 view — the one that carries rationale — and a direction the
+          // reader cannot check is a direction they have to take on faith.
+          ...(includeAll && s.field.strataPopulation
+            ? { strataPopulation: s.field.strataPopulation }
+            : {}),
           adjustments: s.adjustments.map(a => `${a.delta > 0 ? '+' : ''}${a.delta} ${a.reason}`),
         });
 
@@ -201,6 +215,10 @@ class SalesforceServer {
           objectName: catalog.objectName,
           totalFields: catalog.totalFields,
           totalRecords: catalog.totalRecords,
+          // Population is estimated from this many records, not counted over
+          // all of them (ADR-301). Say so, rather than presenting an estimate
+          // with the authority of a census.
+          sampledRecords: catalog.sampledRecords,
           ...(includeAll
             ? { fields: catalog.fields.map(s => ({ ...describe(s), promoted: s.promoted })) }
             : { promoted: catalog.promoted.map(describe) }),

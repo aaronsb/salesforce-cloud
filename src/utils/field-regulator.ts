@@ -8,6 +8,7 @@
  */
 
 import { ComputationType } from './field-type-map.js';
+import type { FieldTrend } from './record-sampler.js';
 
 // ── Types ────────────────────────────────────────────────────────────
 
@@ -23,6 +24,15 @@ export interface FieldCandidate {
   populationPct?: number;
   /** Active picklist values, for categorical fields. Undefined otherwise. */
   picklistValues?: string[];
+  /**
+   * Population within each sampled creation-time window, oldest first (ADR-301).
+   * A by-product of stratified sampling, and the only place drift is visible:
+   * `populationPct` alone cannot tell a steadily-used field from one that was
+   * mandatory for years and has since been abandoned.
+   */
+  strataPopulation?: number[];
+  /** Direction of travel derived from strataPopulation. */
+  trend?: FieldTrend;
 }
 
 export interface ScoreAdjustment {
@@ -120,6 +130,51 @@ export const autoPopulatedRegulator: Regulator = (field) => {
   return null;
 };
 
+/**
+ * Demotion for a field the sample never once saw populated (ADR-301).
+ *
+ * Without this the other regulators rescue it: a checkbox nobody has ever
+ * ticked still collects +5 for being filterable, scores positive, and promotes
+ * — which makes the boolean signal inert, since scoring it honestly at 0%
+ * changes nothing. Only exactly zero qualifies; a field at 3% is rare, not
+ * abandoned, and sparse custom flags are precisely what the catalog is for.
+ *
+ * This is only sayable because the field was *measured*. An unscored field is
+ * silent, not zero, and must not be demoted for it.
+ */
+export const unusedRegulator: Regulator = (field) => {
+  if (field.populationPct !== 0) return null;
+  return {
+    regulator: 'unused',
+    delta: -50,
+    reason: 'no sampled record populates this field',
+  };
+};
+
+/**
+ * Demotion for fields falling out of use (ADR-301).
+ *
+ * Population density alone cannot separate a field the org still fills in from
+ * one it abandoned: a field that was mandatory for years and dead for the last
+ * few averages out to a middling number that ranks alongside a genuinely
+ * steady field. The average describes no record that ever existed. Only the
+ * trend across creation time tells them apart.
+ *
+ * The penalty is half the drop, so it scales with how decisively the practice
+ * changed rather than firing at one fixed strength. Rising fields get no
+ * matching boost: coming into use is already reflected in the recency-weighted
+ * density, and paying for it twice would promote a field on the strength of a
+ * few recent records.
+ */
+export const driftRegulator: Regulator = (field) => {
+  if (field.trend?.direction !== 'falling') return null;
+  return {
+    regulator: 'drift',
+    delta: Math.round(field.trend.deltaPp / 2),
+    reason: `usage falling (${field.trend.deltaPp}pp across the sampled span)`,
+  };
+};
+
 // ── Pipeline ─────────────────────────────────────────────────────────
 
 export const DEFAULT_REGULATORS: Regulator[] = [
@@ -129,6 +184,8 @@ export const DEFAULT_REGULATORS: Regulator[] = [
   qualityBoostRegulator,
   typeRelevanceRegulator,
   autoPopulatedRegulator,
+  unusedRegulator,
+  driftRegulator,
 ];
 
 /** Score a single field through all regulators. */
