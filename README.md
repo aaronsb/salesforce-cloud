@@ -178,6 +178,27 @@ If searching for "Project Status":
 
 ### Core Salesforce Operations
 
+#### search_fields
+Find the field(s) that carry a concept when you know what you want to query but not the API name. Searches the discovered field catalog ([ADR-302](docs/architecture/api/ADR-302-field-search-tool-for-concept-to-field-resolution.md)) by keyword across field API names, labels, and help text, ranked by match strength.
+```typescript
+{
+  term: string;             // Required: matched against field name, label, help text
+  objectName?: string;      // Optional: scope to one object (default: all core objects)
+  includeValues?: boolean;  // Optional: return active picklist values for matches (default: false)
+  minPopulationPct?: number;// Optional: drop fields below this population density (0-100)
+  limit?: number;           // Optional: max matches (default: 25, max: 100)
+}
+```
+Example:
+```javascript
+{
+  "term": "ai",
+  "objectName": "Opportunity",
+  "includeValues": true
+}
+```
+The match is lexical, not semantic: it finds fields whose metadata contains the term, so a concept the schema names differently won't surface — read `salesforce://field-catalog/{objectName}/all` to browse everything.
+
 #### execute_soql
 Execute a SOQL query with pagination support.
 ```typescript

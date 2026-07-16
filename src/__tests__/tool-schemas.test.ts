@@ -65,6 +65,31 @@ describe('tool schemas', () => {
     });
   });
 
+  describe('search_fields', () => {
+    const description = toolSchemas.search_fields.description;
+
+    // "the field catalog" is ambiguous in this repo's own vocabulary:
+    // salesforce://field-catalog/{obj} is the *promoted* set, /all is every
+    // scored field. This tool searches every scored field, so an agent that has
+    // internalised "catalog = promoted, standard fields absent" would otherwise
+    // read the description and conclude the opposite.
+    it('says it searches every scored field, not just promoted ones', () => {
+      expect(description).toMatch(/not just the promoted/i);
+    });
+
+    // Default scope is the core objects. A 0-hit search reads as "this org has
+    // no such field" unless the description admits what it did not look at.
+    it('admits that undiscovered objects are not searched', () => {
+      expect(description).toMatch(/not been discovered is not searched/i);
+    });
+
+    // The example named two fields that exist only in the author's org — a
+    // promise false for every other caller, on the surface read before use.
+    it('does not cite org-specific field names as examples', () => {
+      expect(description).not.toMatch(/__c/);
+    });
+  });
+
   it('no tool description instructs a discovery round-trip before real work', () => {
     const offenders = Object.entries(toolSchemas)
       .filter(([name]) => name !== 'describe_object' && name !== 'list_objects')
