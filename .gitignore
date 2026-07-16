@@ -5,6 +5,7 @@ build/
 .env.*
 !.env.example
 .mcp.json
+.mcpregistry_*_token
 *.mcpb
 *.tgz
 mcpb/server/

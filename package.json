@@ -38,18 +38,18 @@
     "test": "jest"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.20.1",
-    "dotenv": "^17.2.3",
-    "jsforce": "^3.10.8"
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "dotenv": "^17.4.2",
+    "jsforce": "^3.10.19"
   },
   "devDependencies": {
     "@types/jest": "^30.0.0",
-    "@types/node": "^24.8.1",
-    "@typescript-eslint/eslint-plugin": "^8.46.1",
-    "@typescript-eslint/parser": "^8.46.1",
-    "eslint": "^9.38.0",
-    "jest": "^30.2.0",
-    "ts-jest": "^29.4.5",
+    "@types/node": "^24.13.3",
+    "@typescript-eslint/eslint-plugin": "^8.64.0",
+    "@typescript-eslint/parser": "^8.64.0",
+    "eslint": "^9.39.5",
+    "jest": "^30.4.2",
+    "ts-jest": "^29.4.11",
     "typescript": "^5.9.3"
   }
 }

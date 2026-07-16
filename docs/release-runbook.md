@@ -115,7 +115,7 @@ Requires `mcpb` CLI installed (`npm install -g @anthropic-ai/mcpb`).
 
 ## Version Files
 
-The version lives in four places, kept in sync by `make version-sync`:
+The version lives in five places, kept in sync by `make version-sync`:
 
 | File | Field | Purpose |
 |------|-------|---------|
@@ -123,8 +123,14 @@ The version lives in four places, kept in sync by `make version-sync`:
 | `server.json` | `version` | MCP server metadata |
 | `manifest.json` | `version` | Desktop extension metadata |
 | `mcpb/manifest.json` | `version` | .mcpb bundle metadata |
+| `src/version.ts` | `VERSION` | Reported to MCP clients in the initialize handshake |
 
 Never edit these manually — use `npm version` + `make version-sync`.
+
+`src/version.ts` is generated rather than read from `package.json` at runtime
+because the .mcpb build strips `package.json` out of the bundle. `make check`
+fails if any of the five drift, so a forgotten `version-sync` can't ship — the
+server previously reported `0.2.0` while package.json said `0.5.0`.
 
 ## Publishing Channels
 

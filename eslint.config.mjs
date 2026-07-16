@@ -18,6 +18,8 @@ export default [
         console: 'readonly',
         process: 'readonly',
         Buffer: 'readonly',
+        global: 'readonly',
+        globalThis: 'readonly',
         __dirname: 'readonly',
         __filename: 'readonly',
         exports: 'writable',
@@ -27,7 +29,10 @@ export default [
         clearTimeout: 'readonly',
         setInterval: 'readonly',
         clearInterval: 'readonly',
-        fetch: 'readonly'
+        fetch: 'readonly',
+        TextEncoder: 'readonly',
+        TextDecoder: 'readonly',
+        URL: 'readonly'
       }
     },
     plugins: {

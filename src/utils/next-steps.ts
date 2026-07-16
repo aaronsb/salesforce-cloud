@@ -88,10 +88,15 @@ export function getNextSteps(toolName: string, result?: Record<string, any>): st
       break;
 
     // ---- SOQL and generic tools ----
+    // These suggestions point forward, into the task. Sending the agent back to
+    // `describe_object` to "discover fields" is the recon round-trip that field
+    // discovery (ADR-300) exists to eliminate: the ranked fields already ride
+    // along with the response, and the full catalog is a resource read away.
     case 'execute_soql':
       steps.push(
-        { description: 'Describe an object to discover fields', tool: 'describe_object', example: { objectName: '<objectName>', includeFields: true } },
+        { description: 'Refine the query — add filters, fields, or ORDER BY', tool: 'execute_soql', example: { query: 'SELECT Id, Name FROM <objectName> WHERE ... ORDER BY ...' } },
         { description: 'View opportunity details (if querying opportunities)', tool: 'get_opportunity_details', example: { opportunityId: '<id>' } },
+        { description: 'Aggregate or trend these results', tool: 'analyze' },
         { description: 'Create a new record', tool: 'create_record', example: { objectName: '<objectName>', data: {} } },
       );
       break;
@@ -100,14 +105,15 @@ export function getNextSteps(toolName: string, result?: Record<string, any>): st
       steps.push(
         { description: 'Query this object with SOQL', tool: 'execute_soql', example: { query: 'SELECT Id, Name FROM <objectName>' } },
         { description: 'Create a record', tool: 'create_record', example: { objectName: result?.objectName || '<objectName>', data: {} } },
-        { description: 'List all available objects', tool: 'list_objects' },
+        { description: `Read the ranked field catalog — \`salesforce://field-catalog/${result?.objectName || '<objectName>'}/all\`` },
       );
       break;
 
     case 'list_objects':
       steps.push(
-        { description: 'Describe an object to see its fields', tool: 'describe_object', example: { objectName: '<objectName>', includeFields: true } },
-        { description: 'Query a specific object', tool: 'execute_soql', example: { query: 'SELECT Id, Name FROM <objectName>' } },
+        { description: 'Query an object directly', tool: 'execute_soql', example: { query: 'SELECT Id, Name FROM <objectName>' } },
+        { description: 'Read an object\'s ranked field catalog — `salesforce://field-catalog/<objectName>`' },
+        { description: 'Inspect an object\'s schema in full', tool: 'describe_object', example: { objectName: '<objectName>', includeFields: true } },
       );
       break;
 
@@ -115,14 +121,14 @@ export function getNextSteps(toolName: string, result?: Record<string, any>): st
       steps.push(
         { description: 'View the created record', tool: 'execute_soql', example: { query: `SELECT Id, Name FROM ${result?.objectName || '<objectName>'} WHERE Id = '${result?.id || '<id>'}'` } },
         { description: 'Update the record', tool: 'update_record', example: { objectName: result?.objectName || '<objectName>', recordId: result?.id || '<id>', data: {} } },
-        { description: 'Describe the object for available fields', tool: 'describe_object', example: { objectName: result?.objectName || '<objectName>', includeFields: true } },
+        { description: 'Create another record of the same type', tool: 'create_record', example: { objectName: result?.objectName || '<objectName>', data: {} } },
       );
       break;
 
     case 'update_record':
       steps.push(
         { description: 'View the updated record', tool: 'execute_soql', example: { query: `SELECT Id, Name FROM ${result?.objectName || '<objectName>'} WHERE Id = '${result?.id || '<id>'}'` } },
-        { description: 'Describe the object for more fields', tool: 'describe_object', example: { objectName: result?.objectName || '<objectName>', includeFields: true } },
+        { description: 'Update another record of the same type', tool: 'update_record', example: { objectName: result?.objectName || '<objectName>', recordId: '<id>', data: {} } },
       );
       break;
 

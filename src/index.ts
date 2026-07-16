@@ -33,7 +33,10 @@ import { toolSchemas } from './schemas/tool-schemas.js';
 import { SessionCache } from './utils/session-cache.js';
 import { CacheMiddleware } from './utils/cache-middleware.js';
 import { FieldDiscovery } from './client/field-discovery.js';
+import type { ScoredField } from './utils/field-regulator.js';
+import { buildInvalidFieldHint } from './utils/field-hints.js';
 import { CORE_OBJECTS } from './utils/discovery-constants.js';
+import { VERSION } from './version.js';
 
 class SalesforceServer {
   private server: Server;
@@ -53,7 +56,7 @@ class SalesforceServer {
     this.server = new Server(
       {
         name: serverName,
-        version: '0.2.0',
+        version: VERSION,
         description: 'Salesforce Cloud MCP Server - Provides tools for interacting with Salesforce'
       },
       {
@@ -94,41 +97,57 @@ class SalesforceServer {
     }));
 
     this.server.setRequestHandler(ListResourcesRequestSchema, async () => {
-      const resources: Array<{ uri: string; name: string; description: string; mimeType: string }> = [];
+      // Listed unconditionally. Clients call ListResources right after the
+      // handshake, which is before auth and discovery have finished — gating
+      // on `ready` here made the catalog permanently invisible, since there is
+      // no listChanged notification to correct an empty list later. Readiness
+      // is reported inside each payload instead.
+      const stats = this.fieldDiscovery.getStats();
+      const resources = [{
+        uri: 'salesforce://field-catalog/_stats',
+        name: 'Field Discovery Stats',
+        description: stats.ready
+          ? `Discovery status: ${stats.objectsDiscovered} objects, ${stats.totalPromoted} promoted fields`
+          : 'Discovery status: in progress',
+        mimeType: 'application/json',
+      }];
 
-      // Add field catalog resources for discovered objects
-      if (this.fieldDiscovery.ready) {
-        const stats = this.fieldDiscovery.getStats();
+      for (const objectName of CORE_OBJECTS) {
+        const catalog = this.fieldDiscovery.getCatalog(objectName);
         resources.push({
-          uri: 'salesforce://field-catalog/_stats',
-          name: 'Field Discovery Stats',
-          description: `Discovery status: ${stats.objectsDiscovered} objects, ${stats.totalPromoted} promoted fields`,
+          uri: `salesforce://field-catalog/${objectName}`,
+          name: `${objectName} Field Catalog`,
+          description: catalog
+            ? `${catalog.promoted.length} promoted fields out of ${catalog.totalFields}`
+            : `Ranked fields for ${objectName} (discovery in progress)`,
           mimeType: 'application/json',
         });
-
-        for (const objectName of CORE_OBJECTS) {
-          const catalog = this.fieldDiscovery.getCatalog(objectName);
-          if (catalog) {
-            resources.push({
-              uri: `salesforce://field-catalog/${objectName}`,
-              name: `${objectName} Field Catalog`,
-              description: `${catalog.promoted.length} promoted fields out of ${catalog.totalFields}`,
-              mimeType: 'application/json',
-            });
-          }
-        }
+        resources.push({
+          uri: `salesforce://field-catalog/${objectName}/all`,
+          name: `${objectName} Field Catalog (full)`,
+          description: `All scored fields for ${objectName}, including non-promoted, with scoring rationale`,
+          mimeType: 'application/json',
+        });
       }
 
       return { resources };
     });
 
     this.server.setRequestHandler(ListResourceTemplatesRequestSchema, async () => ({
-      resourceTemplates: [{
-        uriTemplate: 'salesforce://field-catalog/{objectName}',
-        name: 'Field Catalog',
-        description: 'Promoted fields for a Salesforce object, ranked by usage and quality',
-        mimeType: 'application/json',
-      }],
+      resourceTemplates: [
+        {
+          uriTemplate: 'salesforce://field-catalog/{objectName}',
+          name: 'Field Catalog',
+          description: 'Fields this org actually populates on an object, ranked by observed usage and quality. Not an exhaustive field list — standard fields stay queryable whether or not they appear here.',
+          mimeType: 'application/json',
+        },
+        {
+          uriTemplate: 'salesforce://field-catalog/{objectName}/all',
+          name: 'Field Catalog (full)',
+          description: 'All scored fields for a Salesforce object, including non-promoted, with scoring rationale',
+          mimeType: 'application/json',
+        },
+      ],
     }));
 
     this.server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
@@ -142,10 +161,16 @@ class SalesforceServer {
         };
       }
 
-      // salesforce://field-catalog/{objectName}
-      const catalogMatch = uri.match(/^salesforce:\/\/field-catalog\/(\w+)$/);
+      // salesforce://field-catalog/{objectName} and .../{objectName}/all
+      // The `/all` suffix is ADR-300's Tier 2 view: every scored field, not
+      // just the promoted ones, each carrying the rationale for its score.
+      // Leading [A-Za-z] rather than \w: Salesforce object names never start
+      // with an underscore, and it keeps `_stats/all` from falling through to
+      // a describe of an object called "_stats".
+      const catalogMatch = uri.match(/^salesforce:\/\/field-catalog\/([A-Za-z]\w*)(\/all)?$/);
       if (catalogMatch) {
         const objectName = catalogMatch[1];
+        const includeAll = catalogMatch[2] !== undefined;
         // Try cached, or discover on-demand
         let catalog = this.fieldDiscovery.getCatalog(objectName);
         if (!catalog) {
@@ -155,20 +180,24 @@ class SalesforceServer {
           throw new McpError(ErrorCode.InvalidRequest, `Could not discover fields for: ${objectName}`);
         }
 
+        const describe = (s: ScoredField) => ({
+          name: s.field.name,
+          label: s.field.label,
+          type: s.field.type,
+          computationType: s.field.computationType,
+          custom: s.field.custom,
+          score: s.score,
+          populationPct: s.field.populationPct,
+          adjustments: s.adjustments.map(a => `${a.delta > 0 ? '+' : ''}${a.delta} ${a.reason}`),
+        });
+
         const payload = {
           objectName: catalog.objectName,
           totalFields: catalog.totalFields,
           totalRecords: catalog.totalRecords,
-          promoted: catalog.promoted.map(s => ({
-            name: s.field.name,
-            label: s.field.label,
-            type: s.field.type,
-            computationType: s.field.computationType,
-            custom: s.field.custom,
-            score: s.score,
-            populationPct: s.field.populationPct,
-            adjustments: s.adjustments.map(a => `${a.delta > 0 ? '+' : ''}${a.delta} ${a.reason}`),
-          })),
+          ...(includeAll
+            ? { fields: catalog.fields.map(s => ({ ...describe(s), promoted: s.promoted })) }
+            : { promoted: catalog.promoted.map(describe) }),
           wellKnown: Object.fromEntries(catalog.wellKnown),
         };
         return {
@@ -195,7 +224,7 @@ class SalesforceServer {
             return await handleAnalyze(this.sfClient, request.params.arguments);
 
           case 'execute_soql':
-            return await handleExecuteSOQL(this.sfClient, request.params.arguments, this.cache);
+            return await handleExecuteSOQL(this.sfClient, request.params.arguments, this.cache, this.fieldDiscovery);
 
           case 'describe_object':
             return await handleDescribeObject(this.sfClient, request.params.arguments, this.cacheMiddleware);
@@ -250,12 +279,39 @@ class SalesforceServer {
         }
         // For Salesforce API errors, return as text content — not MCP errors
         const message = error instanceof Error ? error.message : String(error);
+        // If the call failed on a field that doesn't exist, name the fields
+        // that do (ADR-300). Without this the agent's only recourse is to go
+        // describe the object — the recon round-trip discovery exists to avoid.
+        const fieldHint = buildInvalidFieldHint(this.fieldDiscovery, message);
+        const guidance = fieldHint ||
+          '\n\nThis may be due to insufficient API permissions, disabled features, or fields not available on this org.';
         return {
-          content: [{ type: 'text', text: `**Request failed:** ${message}\n\nThis may be due to insufficient API permissions, disabled features, or fields not available on this org.` }],
+          content: [{ type: 'text', text: `**Request failed:** ${message}${guidance}` }],
           isError: true,
         };
       }
     });
+  }
+
+  /**
+   * Wait on the auth the constructor's warmup() already started, then kick off
+   * field discovery. Separate from run() so it can be tested without binding
+   * stdio — the double-login bug lived here and shipped unnoticed.
+   */
+  startBackgroundInit(): Promise<void> {
+    // Join the auth already kicked off by warmup() in the constructor rather
+    // than starting a second one — initialize() does not reuse the in-flight
+    // promise, so calling it here would log in to Salesforce twice per startup.
+    // Errors are logged but don't crash the server; they surface on first use.
+    return this.sfClient.ensureInitialized()
+      .then(() => {
+        // After auth succeeds, start field discovery (ADR-300).
+        // Non-blocking — tools work immediately, discovery enriches over time.
+        this.fieldDiscovery.startAsync();
+      })
+      .catch((err) => {
+        console.error(`Salesforce auth failed (will retry on first tool call): ${err.message}`);
+      });
   }
 
   async run() {
@@ -266,19 +322,15 @@ class SalesforceServer {
     await this.server.connect(transport);
     console.error('Salesforce MCP server running on stdio');
 
-    // Kick off Salesforce auth in the background — errors are logged
-    // but don't crash the server; they'll surface on the first tool call.
-    this.sfClient.initialize()
-      .then(() => {
-        // After auth succeeds, start field discovery (ADR-300).
-        // Non-blocking — tools work immediately, discovery enriches over time.
-        this.fieldDiscovery.startAsync();
-      })
-      .catch((err) => {
-        console.error(`Salesforce auth failed (will retry on first tool call): ${err.message}`);
-      });
+    this.startBackgroundInit();
   }
 }
 
-const server = new SalesforceServer();
-server.run().catch(console.error);
+export { SalesforceServer };
+
+// Only start a server when run as the entrypoint, so tests can import the
+// class without binding stdio or opening a Salesforce connection.
+if (require.main === module) {
+  const server = new SalesforceServer();
+  server.run().catch(console.error);
+}
