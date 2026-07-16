@@ -8,13 +8,13 @@
     "url": "https://github.com/aaronsb/salesforce-cloud",
     "source": "github"
   },
-  "version": "0.6.0",
+  "version": "0.7.0",
   "packages": [
     {
       "registryType": "npm",
       "registryBaseUrl": "https://registry.npmjs.org",
       "identifier": "@aaronsb/salesforce-cloud-mcp",
-      "version": "0.6.0",
+      "version": "0.7.0",
       "transport": {
         "type": "stdio"
       },
