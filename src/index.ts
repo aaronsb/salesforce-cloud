@@ -33,6 +33,7 @@ import { toolSchemas } from './schemas/tool-schemas.js';
 import { SessionCache } from './utils/session-cache.js';
 import { CacheMiddleware } from './utils/cache-middleware.js';
 import { FieldDiscovery } from './client/field-discovery.js';
+import type { ScoredField } from './utils/field-regulator.js';
 import { CORE_OBJECTS } from './utils/discovery-constants.js';
 import { VERSION } from './version.js';
 
@@ -95,41 +96,57 @@ class SalesforceServer {
     }));
 
     this.server.setRequestHandler(ListResourcesRequestSchema, async () => {
-      const resources: Array<{ uri: string; name: string; description: string; mimeType: string }> = [];
+      // Listed unconditionally. Clients call ListResources right after the
+      // handshake, which is before auth and discovery have finished — gating
+      // on `ready` here made the catalog permanently invisible, since there is
+      // no listChanged notification to correct an empty list later. Readiness
+      // is reported inside each payload instead.
+      const stats = this.fieldDiscovery.getStats();
+      const resources = [{
+        uri: 'salesforce://field-catalog/_stats',
+        name: 'Field Discovery Stats',
+        description: stats.ready
+          ? `Discovery status: ${stats.objectsDiscovered} objects, ${stats.totalPromoted} promoted fields`
+          : 'Discovery status: in progress',
+        mimeType: 'application/json',
+      }];
 
-      // Add field catalog resources for discovered objects
-      if (this.fieldDiscovery.ready) {
-        const stats = this.fieldDiscovery.getStats();
+      for (const objectName of CORE_OBJECTS) {
+        const catalog = this.fieldDiscovery.getCatalog(objectName);
         resources.push({
-          uri: 'salesforce://field-catalog/_stats',
-          name: 'Field Discovery Stats',
-          description: `Discovery status: ${stats.objectsDiscovered} objects, ${stats.totalPromoted} promoted fields`,
+          uri: `salesforce://field-catalog/${objectName}`,
+          name: `${objectName} Field Catalog`,
+          description: catalog
+            ? `${catalog.promoted.length} promoted fields out of ${catalog.totalFields}`
+            : `Ranked fields for ${objectName} (discovery in progress)`,
           mimeType: 'application/json',
         });
-
-        for (const objectName of CORE_OBJECTS) {
-          const catalog = this.fieldDiscovery.getCatalog(objectName);
-          if (catalog) {
-            resources.push({
-              uri: `salesforce://field-catalog/${objectName}`,
-              name: `${objectName} Field Catalog`,
-              description: `${catalog.promoted.length} promoted fields out of ${catalog.totalFields}`,
-              mimeType: 'application/json',
-            });
-          }
-        }
+        resources.push({
+          uri: `salesforce://field-catalog/${objectName}/all`,
+          name: `${objectName} Field Catalog (full)`,
+          description: `All scored fields for ${objectName}, including non-promoted, with scoring rationale`,
+          mimeType: 'application/json',
+        });
       }
 
       return { resources };
     });
 
     this.server.setRequestHandler(ListResourceTemplatesRequestSchema, async () => ({
-      resourceTemplates: [{
-        uriTemplate: 'salesforce://field-catalog/{objectName}',
-        name: 'Field Catalog',
-        description: 'Promoted fields for a Salesforce object, ranked by usage and quality',
-        mimeType: 'application/json',
-      }],
+      resourceTemplates: [
+        {
+          uriTemplate: 'salesforce://field-catalog/{objectName}',
+          name: 'Field Catalog',
+          description: 'Promoted fields for a Salesforce object, ranked by usage and quality',
+          mimeType: 'application/json',
+        },
+        {
+          uriTemplate: 'salesforce://field-catalog/{objectName}/all',
+          name: 'Field Catalog (full)',
+          description: 'All scored fields for a Salesforce object, including non-promoted, with scoring rationale',
+          mimeType: 'application/json',
+        },
+      ],
     }));
 
     this.server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
@@ -143,10 +160,13 @@ class SalesforceServer {
         };
       }
 
-      // salesforce://field-catalog/{objectName}
-      const catalogMatch = uri.match(/^salesforce:\/\/field-catalog\/(\w+)$/);
+      // salesforce://field-catalog/{objectName} and .../{objectName}/all
+      // The `/all` suffix is ADR-300's Tier 2 view: every scored field, not
+      // just the promoted ones, each carrying the rationale for its score.
+      const catalogMatch = uri.match(/^salesforce:\/\/field-catalog\/(\w+)(\/all)?$/);
       if (catalogMatch) {
         const objectName = catalogMatch[1];
+        const includeAll = catalogMatch[2] !== undefined;
         // Try cached, or discover on-demand
         let catalog = this.fieldDiscovery.getCatalog(objectName);
         if (!catalog) {
@@ -156,20 +176,24 @@ class SalesforceServer {
           throw new McpError(ErrorCode.InvalidRequest, `Could not discover fields for: ${objectName}`);
         }
 
+        const describe = (s: ScoredField) => ({
+          name: s.field.name,
+          label: s.field.label,
+          type: s.field.type,
+          computationType: s.field.computationType,
+          custom: s.field.custom,
+          score: s.score,
+          populationPct: s.field.populationPct,
+          adjustments: s.adjustments.map(a => `${a.delta > 0 ? '+' : ''}${a.delta} ${a.reason}`),
+        });
+
         const payload = {
           objectName: catalog.objectName,
           totalFields: catalog.totalFields,
           totalRecords: catalog.totalRecords,
-          promoted: catalog.promoted.map(s => ({
-            name: s.field.name,
-            label: s.field.label,
-            type: s.field.type,
-            computationType: s.field.computationType,
-            custom: s.field.custom,
-            score: s.score,
-            populationPct: s.field.populationPct,
-            adjustments: s.adjustments.map(a => `${a.delta > 0 ? '+' : ''}${a.delta} ${a.reason}`),
-          })),
+          ...(includeAll
+            ? { fields: catalog.fields.map(s => ({ ...describe(s), promoted: s.promoted })) }
+            : { promoted: catalog.promoted.map(describe) }),
           wellKnown: Object.fromEntries(catalog.wellKnown),
         };
         return {
