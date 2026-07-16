@@ -116,6 +116,14 @@ describe('getNextSteps', () => {
       expect(result).toContain('`execute_soql`');
       expect(result).toContain('salesforce://field-catalog/');
     });
+
+    // Unlike execute_soql, describe_object is a legitimate forward move here:
+    // the agent has a list of objects and no schema for any of them yet.
+    it('should still offer describe_object, ranked below the direct query', () => {
+      const result = getNextSteps('list_objects');
+      expect(result).toContain('`describe_object`');
+      expect(result.indexOf('`execute_soql`')).toBeLessThan(result.indexOf('`describe_object`'));
+    });
   });
 
   describe('create_record', () => {
