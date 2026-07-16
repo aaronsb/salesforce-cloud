@@ -288,6 +288,36 @@ export const toolSchemas = {
       }
     },
   },
+  search_fields: {
+    name: 'search_fields',
+    description: 'Find the field(s) that carry a concept, when you know what you want to query but not the API name. Searches the discovered field catalog by keyword across field API names, labels, and help text, ranked by match strength — e.g. "ai" surfaces AI_Opportunity__c and AI_Delivery__c. Searches all core objects by default; pass objectName to scope to one. Set includeValues to get the value set for matched picklists, so you can write the WHERE clause without a second lookup. The match is lexical, not semantic: it finds fields whose name/label/help text contains the term, so a concept the schema names differently won\'t surface — read `salesforce://field-catalog/{objectName}/all` to browse everything.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        term: {
+          type: 'string',
+          description: 'What to look for, matched against field API names, labels, and help text (e.g. "ai", "renewal date", "region")',
+        },
+        objectName: {
+          type: 'string',
+          description: 'Restrict the search to one object (e.g. Opportunity). Omit to search all discovered core objects.',
+        },
+        includeValues: {
+          type: 'boolean',
+          description: 'Include the active value set for matched picklist fields (default: false). Free — the values come from metadata already discovered.',
+        },
+        minPopulationPct: {
+          type: 'number',
+          description: 'Drop fields populated on fewer than this percent of records (0-100). Omit to include sparsely-populated fields, which is often where custom flags live.',
+        },
+        limit: {
+          type: 'number',
+          description: 'Maximum matches to return (default: 25, max: 100)',
+        },
+      },
+      required: ['term'],
+    },
+  },
   execute_soql: {
     name: 'execute_soql',
     description: 'Execute a SOQL query. Supports both standard and custom fields (custom fields end with __c in their API names). To see which fields this org actually populates on an object, read the `salesforce://field-catalog/{objectName}` resource — it is ranked, far smaller than a full schema, and works for any object. That catalog is a usage filter rather than a field list: standard fields remain queryable whether or not they appear in it. Use describe_object when you want an object\'s complete schema.',

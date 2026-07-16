@@ -19,6 +19,7 @@ import { SalesforceClient } from './client/salesforce-client.js';
 import { handleExecuteSOQL } from './handlers/query-handlers.js';
 import { handleSearchOpportunities, handleGetOpportunityDetails } from './handlers/opportunity-handlers.js';
 import { handleDescribeObject, handleListObjects } from './handlers/object-handlers.js';
+import { handleSearchFields } from './handlers/field-search-handler.js';
 import { handleCreateRecord, handleUpdateRecord, handleDeleteRecord } from './handlers/record-handlers.js';
 import { handleGetUserInfo } from './handlers/user-handlers.js';
 import { handleAnalyzeConversation } from './handlers/conversation-handlers.js';
@@ -233,6 +234,9 @@ class SalesforceServer {
 
           case 'describe_object':
             return await handleDescribeObject(this.sfClient, request.params.arguments, this.cacheMiddleware);
+
+          case 'search_fields':
+            return await handleSearchFields(this.fieldDiscovery, request.params.arguments);
 
           case 'create_record':
             return await handleCreateRecord(this.sfClient, request.params.arguments, this.cacheMiddleware);
