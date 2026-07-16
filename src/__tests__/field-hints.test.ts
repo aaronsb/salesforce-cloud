@@ -102,7 +102,7 @@ describe('buildFieldHint', () => {
 
     const hint = buildFieldHint(src, 'Account');
 
-    expect(hint).toContain('Account fields ranked by usage (2 of 87)');
+    expect(hint).toContain('Account — most-populated fields on this org (2 of 87)');
     expect(hint).toContain('Name, Industry');
     expect(hint).toContain('salesforce://field-catalog/Account/all');
   });
@@ -127,7 +127,7 @@ describe('buildFieldHint', () => {
   it('resolves the object case-insensitively for known core objects', () => {
     const src = source({ Account: catalog('Account', ['Name']) });
 
-    expect(buildFieldHint(src, 'account')).toContain('Account fields ranked by usage');
+    expect(buildFieldHint(src, 'account')).toContain('Account — most-populated fields');
   });
 
   it('returns nothing for an undiscovered object rather than guessing', () => {
@@ -157,7 +157,7 @@ describe('buildQueryFieldHints', () => {
     const hints = buildQueryFieldHints(src, 'SELECT Id FROM Account');
 
     expect(hints).toContain('---');
-    expect(hints).toContain('Account fields ranked by usage');
+    expect(hints).toContain('Account — most-populated fields');
   });
 
   it('emits one breadcrumb per discovered object in the query', () => {
@@ -170,8 +170,8 @@ describe('buildQueryFieldHints', () => {
       src, 'SELECT Id FROM Contact WHERE AccountId IN (SELECT Id FROM Account)',
     );
 
-    expect(hints).toContain('Account fields ranked by usage');
-    expect(hints).toContain('Contact fields ranked by usage');
+    expect(hints).toContain('Account — most-populated fields');
+    expect(hints).toContain('Contact — most-populated fields');
   });
 
   // A known gap, asserted so it stays visible: the inner FROM of a child
@@ -185,8 +185,8 @@ describe('buildQueryFieldHints', () => {
 
     const hints = buildQueryFieldHints(src, 'SELECT Id, (SELECT Id FROM Contacts) FROM Account');
 
-    expect(hints).toContain('Account fields ranked by usage');
-    expect(hints).not.toContain('Contact fields ranked by usage');
+    expect(hints).toContain('Account — most-populated fields');
+    expect(hints).not.toContain('Contact — most-populated fields');
   });
 
   it('skips undiscovered objects but keeps the ones it knows', () => {
@@ -196,7 +196,7 @@ describe('buildQueryFieldHints', () => {
       src, 'SELECT Id FROM Account WHERE Id IN (SELECT Unknown__c FROM Unknown__c)',
     );
 
-    expect(hints).toContain('Account fields ranked by usage');
+    expect(hints).toContain('Account — most-populated fields');
     expect(hints).not.toContain('Unknown__c fields');
   });
 
@@ -212,8 +212,8 @@ describe('buildQueryFieldHints', () => {
       src, "SELECT Id FROM Account WHERE Description LIKE '%order from Lead%'",
     );
 
-    expect(hints).toContain('Account fields ranked by usage');
-    expect(hints).not.toContain('Lead fields ranked by usage');
+    expect(hints).toContain('Account — most-populated fields');
+    expect(hints).not.toContain('Lead — most-populated fields');
   });
 
   it('stays silent when nothing in the query is discovered', () => {

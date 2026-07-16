@@ -107,7 +107,7 @@ describe('Query Handlers', () => {
           mockClient, { query: 'SELECT Id FROM Account' }, undefined, catalogSource,
         );
 
-        expect(result.content[0].text).toContain('Account fields ranked by usage (1 of 87)');
+        expect(result.content[0].text).toContain('Account — most-populated fields on this org (1 of 87)');
         expect(result.content[0].text).toContain('Industry');
         expect(result.content[0].text).toContain('salesforce://field-catalog/Account/all');
       });
@@ -117,14 +117,14 @@ describe('Query Handlers', () => {
           mockClient, { query: 'SELECT Id FROM Unknown__c' }, undefined, catalogSource,
         );
 
-        expect(result.content[0].text).not.toContain('ranked by usage');
+        expect(result.content[0].text).not.toContain('most-populated fields');
       });
 
       it('works without a catalog source at all', async () => {
         const result = await handleExecuteSOQL(mockClient, { query: 'SELECT Id FROM Account' });
 
         expect(result.content[0].text).toContain('Query Results');
-        expect(result.content[0].text).not.toContain('ranked by usage');
+        expect(result.content[0].text).not.toContain('most-populated fields');
       });
     });
   });

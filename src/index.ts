@@ -138,7 +138,7 @@ class SalesforceServer {
         {
           uriTemplate: 'salesforce://field-catalog/{objectName}',
           name: 'Field Catalog',
-          description: 'Promoted fields for a Salesforce object, ranked by usage and quality',
+          description: 'Fields this org actually populates on an object, ranked by observed usage and quality. Not an exhaustive field list — standard fields stay queryable whether or not they appear here.',
           mimeType: 'application/json',
         },
         {

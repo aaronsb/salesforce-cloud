@@ -82,7 +82,15 @@ function findCatalog(source: CatalogSource, objectName: string): ObjectCatalog |
 }
 
 /**
- * A one-line breadcrumb naming an object's top-ranked fields.
+ * A one-line breadcrumb naming the fields this org actually populates.
+ *
+ * The wording matters and is easy to get wrong. The catalog is not a ranking of
+ * an object's most useful fields — it is an abandonment filter over the fields
+ * an agent could not otherwise guess (ADR-300). Standard fields are deliberately
+ * absent: promotion budget is scarce (40/object), and spending it on `Name` —
+ * which every caller already knows — would waste it. Calling this list "fields
+ * ranked by usage" invites the reader to conclude that anything missing from it
+ * is unavailable, which is false and the opposite of helpful.
  *
  * Returns '' when the object has not been discovered — a hint that isn't
  * grounded in the catalog is worse than no hint.
@@ -96,8 +104,9 @@ export function buildFieldHint(source: CatalogSource, objectName: string): strin
   const more = remaining > 0 ? `, +${remaining} more` : '';
 
   return (
-    `${catalog.objectName} fields ranked by usage (${catalog.promoted.length} of ${catalog.totalFields}): ` +
-    `${shown.join(', ')}${more}. ` +
+    `${catalog.objectName} — most-populated fields on this org ` +
+    `(${catalog.promoted.length} of ${catalog.totalFields}): ${shown.join(', ')}${more}. ` +
+    `Standard fields remain queryable whether or not they are listed. ` +
     `Full catalog: \`salesforce://field-catalog/${catalog.objectName}/all\``
   );
 }
