@@ -51,13 +51,31 @@ describe('extractObjectNames', () => {
       .toEqual(['Opportunity']);
   });
 
-  it('finds objects in subqueries as well as the main FROM', () => {
+  it('finds the real object named by a semi-join subquery', () => {
+    const soql = "SELECT Id FROM Contact WHERE AccountId IN (SELECT Id FROM Account WHERE Industry = 'Tech')";
+    expect(extractObjectNames(soql)).toEqual(['Contact', 'Account']);
+  });
+
+  it('surfaces a child subquery\'s relationship name, which is not an object name', () => {
+    // Real SOQL: the inner FROM takes the relationship (`Contacts`), not the
+    // object (`Contact`). Extraction is textual, so it reports what's written;
+    // resolution drops it. See the buildQueryFieldHints tests.
     const soql = 'SELECT Id, (SELECT Id FROM Contacts) FROM Account';
     expect(extractObjectNames(soql)).toEqual(['Contacts', 'Account']);
   });
 
   it('deduplicates repeated objects, preserving first-seen order', () => {
     const soql = 'SELECT Id FROM Account WHERE Id IN (SELECT AccountId FROM Account)';
+    expect(extractObjectNames(soql)).toEqual(['Account']);
+  });
+
+  it('ignores FROM inside a string literal', () => {
+    const soql = "SELECT Id FROM Account WHERE Description LIKE '%order from Lead%'";
+    expect(extractObjectNames(soql)).toEqual(['Account']);
+  });
+
+  it('ignores FROM inside a literal containing an escaped quote', () => {
+    const soql = "SELECT Id FROM Account WHERE Name = 'O\\'Brien from Lead'";
     expect(extractObjectNames(soql)).toEqual(['Account']);
   });
 
@@ -148,19 +166,54 @@ describe('buildQueryFieldHints', () => {
       Contact: catalog('Contact', ['Email']),
     });
 
-    const hints = buildQueryFieldHints(src, 'SELECT Id, (SELECT Id FROM Contact) FROM Account');
+    const hints = buildQueryFieldHints(
+      src, 'SELECT Id FROM Contact WHERE AccountId IN (SELECT Id FROM Account)',
+    );
 
     expect(hints).toContain('Account fields ranked by usage');
     expect(hints).toContain('Contact fields ranked by usage');
   });
 
+  // A known gap, asserted so it stays visible: the inner FROM of a child
+  // subquery is a relationship name, so it resolves to nothing and the query
+  // gets only the parent's breadcrumb.
+  it('hints only the parent object for a child-relationship subquery', () => {
+    const src = source({
+      Account: catalog('Account', ['Name']),
+      Contact: catalog('Contact', ['Email']),
+    });
+
+    const hints = buildQueryFieldHints(src, 'SELECT Id, (SELECT Id FROM Contacts) FROM Account');
+
+    expect(hints).toContain('Account fields ranked by usage');
+    expect(hints).not.toContain('Contact fields ranked by usage');
+  });
+
   it('skips undiscovered objects but keeps the ones it knows', () => {
     const src = source({ Account: catalog('Account', ['Name']) });
 
-    const hints = buildQueryFieldHints(src, 'SELECT Id, (SELECT Id FROM Unknown__c) FROM Account');
+    const hints = buildQueryFieldHints(
+      src, 'SELECT Id FROM Account WHERE Id IN (SELECT Unknown__c FROM Unknown__c)',
+    );
 
     expect(hints).toContain('Account fields ranked by usage');
     expect(hints).not.toContain('Unknown__c fields');
+  });
+
+  // Guards the phantom-breadcrumb bug: 'Lead' is a core object, so a bare
+  // regex match inside a literal would resolve and emit a confident, wrong hint.
+  it('does not hint an object that only appears inside a string literal', () => {
+    const src = source({
+      Account: catalog('Account', ['Name']),
+      Lead: catalog('Lead', ['Company']),
+    });
+
+    const hints = buildQueryFieldHints(
+      src, "SELECT Id FROM Account WHERE Description LIKE '%order from Lead%'",
+    );
+
+    expect(hints).toContain('Account fields ranked by usage');
+    expect(hints).not.toContain('Lead fields ranked by usage');
   });
 
   it('stays silent when nothing in the query is discovered', () => {

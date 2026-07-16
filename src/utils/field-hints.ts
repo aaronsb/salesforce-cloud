@@ -31,14 +31,31 @@ export interface CatalogSource {
 export const HINT_FIELD_LIMIT = 15;
 
 /**
+ * Remove single-quoted string literals so their contents can't be parsed as
+ * SOQL. Without this, `WHERE Description LIKE '%order from Lead%'` reads as a
+ * query against Lead and earns a confident, wrong breadcrumb.
+ */
+function stripStringLiterals(soql: string): string {
+  return soql.replace(/'(?:\\.|[^'\\])*'/g, "''");
+}
+
+/**
  * Extract the object names a SOQL statement reads from.
  *
- * Covers the main FROM plus subquery FROMs; deduplicated, in first-seen order.
+ * Covers the main FROM and semi-join subqueries (`WHERE Id IN (SELECT ...
+ * FROM Account)`), which name real objects. Child-relationship subqueries
+ * (`SELECT Id, (SELECT Id FROM Contacts) FROM Account`) name a *relationship*,
+ * not an object — `Contacts`, not `Contact` — so they surface here but won't
+ * resolve to a catalog and are dropped downstream. Resolving them would mean
+ * reading childRelationships off the describe; until then, a child subquery
+ * simply earns no hint, which is the safe direction.
+ *
+ * Deduplicated, in first-seen order.
  */
 export function extractObjectNames(soql: string): string[] {
   const names: string[] = [];
   const seen = new Set<string>();
-  for (const match of soql.matchAll(/\bFROM\s+([A-Za-z_][A-Za-z0-9_]*)/gi)) {
+  for (const match of stripStringLiterals(soql).matchAll(/\bFROM\s+([A-Za-z_][A-Za-z0-9_]*)/gi)) {
     const name = match[1];
     const key = name.toLowerCase();
     if (!seen.has(key)) {

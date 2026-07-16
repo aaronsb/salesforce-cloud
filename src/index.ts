@@ -164,7 +164,10 @@ class SalesforceServer {
       // salesforce://field-catalog/{objectName} and .../{objectName}/all
       // The `/all` suffix is ADR-300's Tier 2 view: every scored field, not
       // just the promoted ones, each carrying the rationale for its score.
-      const catalogMatch = uri.match(/^salesforce:\/\/field-catalog\/(\w+)(\/all)?$/);
+      // Leading [A-Za-z] rather than \w: Salesforce object names never start
+      // with an underscore, and it keeps `_stats/all` from falling through to
+      // a describe of an object called "_stats".
+      const catalogMatch = uri.match(/^salesforce:\/\/field-catalog\/([A-Za-z]\w*)(\/all)?$/);
       if (catalogMatch) {
         const objectName = catalogMatch[1];
         const includeAll = catalogMatch[2] !== undefined;
