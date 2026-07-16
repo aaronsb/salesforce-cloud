@@ -6,4 +6,4 @@
  * package.json, so the version has to be baked in at build time rather than
  * read at runtime. version.test.ts fails the build if this drifts.
  */
-export const VERSION = '0.5.0';
+export const VERSION = '0.6.0';
