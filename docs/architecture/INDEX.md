@@ -32,4 +32,4 @@ _Salesforce API interaction, authentication, query patterns_
 | ADR | Title | Status |
 |-----|-------|--------|
 | [ADR-300](./api/ADR-300-field-discovery-with-tiered-promotion-and-catalog-resources.md) | Field discovery with tiered promotion and catalog resources | Accepted |
-| [ADR-301](./api/ADR-301-sample-records-to-score-fields-and-weight-the-sample-by-recency.md) | Sample records to score fields, and weight the sample by recency | Draft |
+| [ADR-301](./api/ADR-301-sample-records-to-score-fields-and-weight-the-sample-by-recency.md) | Sample records to score fields, and weight the sample by recency | Accepted |
