@@ -34,6 +34,7 @@ import { SessionCache } from './utils/session-cache.js';
 import { CacheMiddleware } from './utils/cache-middleware.js';
 import { FieldDiscovery } from './client/field-discovery.js';
 import { CORE_OBJECTS } from './utils/discovery-constants.js';
+import { VERSION } from './version.js';
 
 class SalesforceServer {
   private server: Server;
@@ -53,7 +54,7 @@ class SalesforceServer {
     this.server = new Server(
       {
         name: serverName,
-        version: '0.2.0',
+        version: VERSION,
         description: 'Salesforce Cloud MCP Server - Provides tools for interacting with Salesforce'
       },
       {
