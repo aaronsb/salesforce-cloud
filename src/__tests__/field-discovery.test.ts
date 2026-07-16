@@ -421,6 +421,44 @@ describe('FieldDiscovery', () => {
     });
   });
 
+  describe('whenSettled', () => {
+    it('resolves once startup discovery has finished', async () => {
+      const { client } = makeClient({
+        describes: Object.fromEntries(CORE_OBJECTS.map(o => [o, [field({ name: 'Name' })]])),
+        counts: Object.fromEntries(CORE_OBJECTS.map(o => [o, 1])),
+      });
+      const discovery = new FieldDiscovery(client);
+
+      discovery.startAsync();
+
+      await expect(discovery.whenSettled()).resolves.toBe(true);
+      expect(discovery.ready).toBe(true);
+    });
+
+    // Callers wait on this to react to discovery landing. Discovery already
+    // logs and records its own failures, so rejecting here would force every
+    // caller to handle an error that has already been dealt with.
+    it('resolves rather than rejecting when discovery blows up', async () => {
+      const { client } = makeClient();
+      const discovery = new FieldDiscovery(client);
+      jest.spyOn(discovery as any, 'discoverCoreObjects').mockRejectedValue(new Error('boom'));
+
+      discovery.startAsync();
+
+      await expect(discovery.whenSettled()).resolves.toBe(true);
+    });
+
+    // A bare resolve() here would be indistinguishable from "discovery
+    // finished", and a caller would act on a state change that never happened.
+    it('reports false when discovery was never started', async () => {
+      const { client } = makeClient();
+      const discovery = new FieldDiscovery(client);
+
+      await expect(discovery.whenSettled()).resolves.toBe(false);
+      expect(discovery.ready).toBe(false);
+    });
+  });
+
   describe('global promotion budget', () => {
     it('caps promoted fields at the per-object maximum', async () => {
       const many = Array.from({ length: MAX_PROMOTED_PER_OBJECT + 20 }, (_, i) =>
