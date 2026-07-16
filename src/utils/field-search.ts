@@ -14,10 +14,10 @@
  * deterministic and unit-testable without a Salesforce connection.
  *
  * Deliberately *lexical*, not semantic (ADR-302). It matches the term against
- * the field's API name, label, and help text. It will find `AI_Opportunity__c`
- * from "ai" because the string is there; it will not find it from "attribution"
- * because nothing in the metadata says "attribution". That leap is the caller's
- * to make — the tool narrows the haystack, it doesn't read minds.
+ * the field's API name, label, and help text. A field named `Renewal_Risk__c`
+ * is found from "risk" because the string is there; it is not found from
+ * "churn" because nothing in the metadata says "churn". That leap is the
+ * caller's to make — the tool narrows the haystack, it doesn't read minds.
  */
 
 import type { ScoredField } from './field-regulator.js';
@@ -192,11 +192,19 @@ export function searchFields(
     });
   }
 
+  // Object is part of the tie-break, not decoration. Standard fields share a
+  // name across objects — Name, CreatedDate and OwnerId exist on all of them —
+  // so name alone leaves ties unresolved. A stable sort then falls back to
+  // input order, which is catalog insertion order, which is the completion
+  // order of parallel discovery tasks: network timing. Without this the same
+  // search returns a different object's Name first across restarts, and with
+  // `limit` truncation it drops different rows.
   hits.sort((a, b) =>
     b.relevance - a.relevance ||
     b.score - a.score ||
     (b.populationPct ?? 0) - (a.populationPct ?? 0) ||
-    a.name.localeCompare(b.name),
+    a.name.localeCompare(b.name) ||
+    a.object.localeCompare(b.object),
   );
 
   return hits.slice(0, limit);

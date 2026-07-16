@@ -290,7 +290,7 @@ export const toolSchemas = {
   },
   search_fields: {
     name: 'search_fields',
-    description: 'Find the field(s) that carry a concept, when you know what you want to query but not the API name. Searches the discovered field catalog by keyword across field API names, labels, and help text, ranked by match strength — e.g. "ai" surfaces AI_Opportunity__c and AI_Delivery__c. Searches all core objects by default; pass objectName to scope to one. Set includeValues to get the value set for matched picklists, so you can write the WHERE clause without a second lookup. The match is lexical, not semantic: it finds fields whose name/label/help text contains the term, so a concept the schema names differently won\'t surface — read `salesforce://field-catalog/{objectName}/all` to browse everything.',
+    description: 'Find the field(s) that carry a concept, when you know what you want to query but not the API name. Searches every scored field on the discovered objects — not just the promoted ones — across API names, labels, and help text, ranked by match strength. Searches the core objects by default; pass objectName to scope to one, which discovers it on demand. Set includeValues to get the value set for matched picklists, so you can write the WHERE clause without a second lookup. The match is lexical, not semantic: it finds fields whose name, label or help text contains the term, so a concept this org names differently will not surface, and an object that has not been discovered is not searched. Read `salesforce://field-catalog/{objectName}/all` to browse everything on an object.',
     inputSchema: {
       type: 'object',
       properties: {

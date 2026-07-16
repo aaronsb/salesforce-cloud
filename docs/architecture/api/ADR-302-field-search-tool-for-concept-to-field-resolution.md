@@ -38,8 +38,9 @@ Claude Code.
 
 Add a `search_fields` tool: a lexical search over the discovered catalogs that
 returns the fields matching a term, ranked, optionally carrying their value
-sets. It is a read over already-discovered metadata — no new Salesforce calls on
-the hot path.
+sets. On its default path it is a read over already-discovered metadata and
+costs no Salesforce calls; naming an object the startup sweep has not reached
+discovers it first, at the usual cost of a discovery.
 
 ### Matching
 

@@ -103,4 +103,73 @@ describe('handleSearchFields', () => {
     const { fd } = fakeDiscovery([oppCatalog]);
     await expect(handleSearchFields(fd, {})).rejects.toThrow(/term/i);
   });
+
+  describe('objectName validation', () => {
+    // The object name is interpolated into SOQL during discovery
+    // (field-discovery.ts builds `SELECT COUNT() FROM ${objectName}`). The
+    // catalog resource guards this with the same pattern; the handler must not
+    // rely on describe() happening to reject it first.
+    it('rejects an object name that is not a plain identifier', async () => {
+      const { fd, discoverObject } = fakeDiscovery([oppCatalog]);
+
+      await expect(handleSearchFields(fd, { term: 'ai', objectName: "Opp' OR Id != '" }))
+        .rejects.toThrow(/Invalid Salesforce object name/i);
+      expect(discoverObject).not.toHaveBeenCalled();
+    });
+
+    it('rejects a non-string object name rather than mis-diagnosing it', async () => {
+      const { fd } = fakeDiscovery([oppCatalog]);
+
+      // Previously rendered "No field catalog is available for [object Object]",
+      // which blames discovery for what is an invalid argument.
+      await expect(handleSearchFields(fd, { term: 'ai', objectName: { evil: true } }))
+        .rejects.toThrow(/must be a string/i);
+    });
+  });
+
+  // SOQL is case-insensitive, so an agent will write `opportunity`. Missing the
+  // cache would re-discover the object under a second key, and the duplicate's
+  // promoted fields push the already-binding global budget further past its cap
+  // — demoting fields on *other* objects. A read-only search must not degrade
+  // unrelated surfaces.
+  it('resolves a differently-cased object name to the cached catalog', async () => {
+    const { fd, discoverObject } = fakeDiscovery([oppCatalog]);
+
+    const out = await text(await handleSearchFields(fd, { term: 'ai', objectName: 'opportunity' }));
+
+    expect(discoverObject).not.toHaveBeenCalled();
+    expect(out).toContain('AI_Opportunity__c');
+  });
+
+  describe('numeric arguments', () => {
+    // NaN is a number, survives Math.min/max, and reaches slice(0, NaN) -> [],
+    // which renders as "no fields matched" — a plumbing failure reported as a
+    // claim about the org's schema. That is the bug class this repo has now
+    // fixed three times.
+    it('falls back to the default limit rather than reporting no matches', async () => {
+      const { fd } = fakeDiscovery([oppCatalog]);
+
+      const out = await text(await handleSearchFields(fd, { term: 'ai', limit: NaN }));
+
+      expect(out).not.toMatch(/matched "ai"/i);
+      expect(out).toContain('AI_Opportunity__c');
+    });
+
+    it('ignores a non-finite minPopulationPct rather than filtering everything out', async () => {
+      const { fd } = fakeDiscovery([oppCatalog]);
+
+      const out = await text(await handleSearchFields(fd, { term: 'ai', minPopulationPct: NaN }));
+
+      expect(out).toContain('AI_Opportunity__c');
+    });
+
+    it('clamps an out-of-range minPopulationPct instead of matching nothing', async () => {
+      const { fd } = fakeDiscovery([oppCatalog]);
+
+      const out = await text(await handleSearchFields(fd, { term: 'ai', minPopulationPct: 150 }));
+
+      // Clamped to 100 — a real filter, not an accidental empty result.
+      expect(out).toMatch(/matched "ai"|AI_Opportunity__c/);
+    });
+  });
 });

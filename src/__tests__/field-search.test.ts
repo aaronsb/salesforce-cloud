@@ -11,7 +11,15 @@ import type { ScoredField, FieldCandidate } from '../utils/field-regulator';
  * lexical, so a concept the schema doesn't name lexically does not surface.
  */
 
-function field(partial: Partial<FieldCandidate> & { name: string }): ScoredField {
+/**
+ * `score` defaults to populationPct for brevity, but is settable independently:
+ * the two are separate tie-break levels, and a fixture that conflates them
+ * cannot tell which one fired.
+ */
+function field(
+  partial: Partial<FieldCandidate> & { name: string },
+  score?: number,
+): ScoredField {
   return {
     field: {
       label: partial.name,
@@ -22,7 +30,7 @@ function field(partial: Partial<FieldCandidate> & { name: string }): ScoredField
       computationType: 'text',
       ...partial,
     },
-    score: partial.populationPct ?? 0,
+    score: score ?? partial.populationPct ?? 0,
     adjustments: [],
     promoted: false,
   };
@@ -122,5 +130,40 @@ describe('searchFields', () => {
     const hits = searchFields('region', tie);
     // Equal relevance (same label word match); higher score/population wins.
     expect(hits[0].name).toBe('Region_High__c');
+  });
+
+  // score and population are separate levels. With the fixture conflating them,
+  // either could be deleted and the test above would still pass.
+  it('prefers catalog score over population when they disagree', () => {
+    const tie: FieldSearchInput[] = [
+      input('A', field({ name: 'Region_Dense__c', label: 'Region', populationPct: 90 }, 10)),
+      input('B', field({ name: 'Region_Ranked__c', label: 'Region', populationPct: 20 }, 90)),
+    ];
+
+    const hits = searchFields('region', tie);
+
+    expect(hits[0].name).toBe('Region_Ranked__c');
+  });
+
+  // Standard fields share a name across objects, so name alone leaves ties
+  // unresolved and order falls back to catalog insertion — which is the
+  // completion order of parallel discovery, i.e. network timing. Without an
+  // object tie-break the same search returns different rows across restarts.
+  it('breaks an identical-name tie by object, not by discovery order', () => {
+    const sameName = () => field({ name: 'Name', label: 'Name', populationPct: 100 }, 100);
+    const forward: FieldSearchInput[] = [
+      input('Opportunity', sameName()),
+      input('Account', sameName()),
+    ];
+    const reversed: FieldSearchInput[] = [
+      input('Account', sameName()),
+      input('Opportunity', sameName()),
+    ];
+
+    const a = searchFields('name', forward).map(h => h.object);
+    const b = searchFields('name', reversed).map(h => h.object);
+
+    expect(a).toEqual(['Account', 'Opportunity']);
+    expect(b).toEqual(a);
   });
 });

@@ -15,6 +15,7 @@ import {
   searchFields, FieldSearchInput, FieldSearchHit,
   DEFAULT_SEARCH_LIMIT, MAX_SEARCH_LIMIT,
 } from '../utils/field-search.js';
+import { CORE_OBJECTS } from '../utils/discovery-constants.js';
 import { simpleResponse } from '../utils/response-helper.js';
 
 interface SearchFieldsParams {
@@ -28,6 +29,22 @@ interface SearchFieldsParams {
 function isSearchFieldsParams(obj: any): obj is SearchFieldsParams {
   return typeof obj === 'object' && obj !== null &&
     typeof obj.term === 'string' && obj.term.trim() !== '';
+}
+
+/**
+ * Resolve an object name to the key its catalog is stored under.
+ *
+ * SOQL is case-insensitive, so an agent will write `opportunity` as readily as
+ * `Opportunity`, but the catalog is keyed by exact API name. Matching the
+ * spelling as written would miss the cache and re-discover the object under a
+ * second key — which is worse than slow: `allCatalogs()` would then return
+ * every Opportunity field twice, and the duplicate's promoted fields would push
+ * the global budget further past its cap, demoting fields on *other* objects.
+ * A read-only search must not degrade the hints on unrelated surfaces.
+ */
+function canonicalObjectName(fd: FieldDiscovery, objectName: string): string {
+  if (fd.getCatalog(objectName)) return objectName;
+  return CORE_OBJECTS.find(o => o.toLowerCase() === objectName.toLowerCase()) ?? objectName;
 }
 
 /** Flatten a set of catalogs into the (object, field) pairs the matcher wants. */
@@ -82,23 +99,49 @@ export async function handleSearchFields(fd: FieldDiscovery, args: any) {
   }
 
   const includeValues = args.includeValues === true;
-  const limit = typeof args.limit === 'number'
-    ? Math.max(1, Math.min(args.limit, MAX_SEARCH_LIMIT))
+  // Number.isFinite, not typeof: NaN is a number, and it survives the clamp
+  // (Math.min(NaN, 100) is NaN) all the way to slice(0, NaN), which returns []
+  // and renders as "no fields matched" — a plumbing failure dressed up as a
+  // claim about the org's schema.
+  const limit = Number.isFinite(args.limit as number)
+    ? Math.max(1, Math.min(args.limit as number, MAX_SEARCH_LIMIT))
     : DEFAULT_SEARCH_LIMIT;
+  const minPopulationPct = Number.isFinite(args.minPopulationPct as number)
+    ? Math.max(0, Math.min(args.minPopulationPct as number, 100))
+    : undefined;
+
+  if (args.objectName !== undefined && typeof args.objectName !== 'string') {
+    throw new McpError(
+      ErrorCode.InvalidParams,
+      'search_fields `objectName` must be a string',
+    );
+  }
+
+  // Same shape as the catalog resource's guard (index.ts): an object name is
+  // interpolated into SOQL during discovery, so validate it here rather than
+  // relying on describe() to reject it first.
+  if (args.objectName !== undefined && !/^[A-Za-z]\w*$/.test(args.objectName)) {
+    throw new McpError(
+      ErrorCode.InvalidParams,
+      `Invalid Salesforce object name: "${args.objectName}"`,
+    );
+  }
+
+  const objectName = args.objectName ? canonicalObjectName(fd, args.objectName) : undefined;
 
   // Scope to one object on request — discovering it on demand if the startup
   // sweep hasn't reached it, exactly as the catalog resource does.
-  if (args.objectName && !fd.getCatalog(args.objectName)) {
-    await fd.discoverObject(args.objectName);
+  if (objectName && !fd.getCatalog(objectName)) {
+    await fd.discoverObject(objectName);
   }
 
-  const candidates = candidatesFrom(fd, args.objectName);
+  const candidates = candidatesFrom(fd, objectName);
 
   // Nothing to search means discovery hasn't landed (or the named object
   // couldn't be discovered). Say so rather than returning a bare "0 matches",
   // which reads as "this org has no AI field" — a confidently wrong answer.
   if (candidates.length === 0) {
-    const scope = args.objectName ? ` for ${args.objectName}` : '';
+    const scope = objectName ? ` for ${objectName}` : '';
     return simpleResponse(
       `No field catalog is available${scope} yet — discovery may still be in ` +
       `progress. Read \`salesforce://field-catalog/_stats\` to check status, ` +
@@ -110,16 +153,16 @@ export async function handleSearchFields(fd: FieldDiscovery, args: any) {
   const hits = searchFields(args.term, candidates, {
     includeValues,
     limit,
-    ...(typeof args.minPopulationPct === 'number' ? { minPopulationPct: args.minPopulationPct } : {}),
+    ...(minPopulationPct !== undefined ? { minPopulationPct } : {}),
   });
 
   if (hits.length === 0) {
-    const scope = args.objectName ? ` on ${args.objectName}` : ' on any discovered object';
+    const scope = objectName ? ` on ${objectName}` : ' on any discovered object';
     return simpleResponse(
       `No fields${scope} matched "${args.term}". The match is lexical — it looks ` +
       `at field API names, labels, and help text — so a concept named differently ` +
       `in the schema won't surface. Try a synonym, or read the full catalog: ` +
-      `\`salesforce://field-catalog/${args.objectName ?? '{object}'}/all\`.`,
+      `\`salesforce://field-catalog/${objectName ?? '{object}'}/all\`.`,
       'search_fields',
     );
   }
