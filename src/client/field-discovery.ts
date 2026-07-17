@@ -15,7 +15,9 @@ import { withRetry, parallelLimit } from '../utils/rate-limited-executor.js';
 import {
   CORE_OBJECTS, DISCOVERY_CONCURRENCY, SCORING_BATCH_SIZE,
   MAX_PROMOTED_PER_OBJECT, MAX_PROMOTED_TOTAL, WELL_KNOWN_PATTERNS,
+  SAMPLE_EXCLUDED_TYPES,
 } from '../utils/discovery-constants.js';
+import { planStrata, pooledPopulation, populationIn, trendFrom } from '../utils/record-sampler.js';
 
 // ── Types ────────────────────────────────────────────────────────────
 
@@ -32,14 +34,31 @@ export interface ObjectCatalog {
   scoringMs: number;
   totalFields: number;
   totalRecords: number;
+  /**
+   * Records actually drawn to score this object (ADR-301). Population is an
+   * estimate from this many rows, not a census — worth reporting, because the
+   * exactness it replaced was exactness about the wrong quantity.
+   */
+  sampledRecords: number;
 }
 
 export interface DiscoveryStats {
   objectsDiscovered: number;
+  /** Core objects the startup sweep intends to cover. */
+  objectsExpected: number;
+  /** Core objects not yet discovered. Empty once ready. */
+  pendingObjects: string[];
   totalFieldsSeen: number;
   totalPromoted: number;
   totalMs: number;
   ready: boolean;
+  /**
+   * Rough time left, projected from the pace so far (ADR-301). Present only
+   * while discovery is running and at least one object has landed to project
+   * from — a caller deciding whether to wait needs a number, and "unknown" is
+   * an honest answer before there is any evidence to base one on.
+   */
+  etaMs?: number;
   errors: string[];
 }
 
@@ -52,6 +71,8 @@ export class FieldDiscovery {
   private startupPromise: Promise<void> | null = null;
   private errors: string[] = [];
   private totalMs = 0;
+  /** When the startup sweep began — the basis for the ETA projection. */
+  private startedAt: number | null = null;
   private _ready = false;
 
   constructor(client: SalesforceClient, regulators?: Regulator[]) {
@@ -114,14 +135,36 @@ export class FieldDiscovery {
       totalFieldsSeen += catalog.totalFields;
       totalPromoted += catalog.promoted.length;
     }
+
+    // Only the startup sweep has a known scope to be pending against; objects
+    // discovered on demand are extra, not outstanding.
+    const pendingObjects = this._ready ? [] : CORE_OBJECTS.filter(o => !this.catalogs.has(o));
+    const done = CORE_OBJECTS.length - pendingObjects.length;
+    const eta = this.etaMs(done, pendingObjects.length);
+
     return {
       objectsDiscovered: this.catalogs.size,
+      objectsExpected: CORE_OBJECTS.length,
+      pendingObjects,
       totalFieldsSeen,
       totalPromoted,
       totalMs: this.totalMs,
       ready: this._ready,
+      ...(eta !== undefined ? { etaMs: eta } : {}),
       errors: [...this.errors],
     };
+  }
+
+  /**
+   * Project the time left from the pace so far, accounting for the objects
+   * discovered in parallel. A projection, not a promise — but a caller deciding
+   * whether to wait or fall back needs a number, and the alternative is asking
+   * them to guess.
+   */
+  private etaMs(done: number, remaining: number): number | undefined {
+    if (this._ready || this.startedAt === null || done === 0 || remaining === 0) return undefined;
+    const perObject = (Date.now() - this.startedAt) / done;
+    return Math.round((perObject * remaining) / DISCOVERY_CONCURRENCY);
   }
 
   /** Discover an object on-demand (if not already cached). */
@@ -142,6 +185,7 @@ export class FieldDiscovery {
 
   private async discoverCoreObjects(): Promise<void> {
     const start = Date.now();
+    this.startedAt = start;
 
     const tasks = CORE_OBJECTS.map((obj) => async () => {
       try {
@@ -190,33 +234,9 @@ export class FieldDiscovery {
         : undefined,
     }));
 
-    // 3. Population scoring
+    // 3. Population scoring, from a stratified sample (ADR-301)
     const scoringStart = Date.now();
-    const scorable = candidates.filter(f => f.nillable && isScorable(f.type));
-    let totalRecords = 0;
-
-    try {
-      const countResult = await this.queryObject(objectName, 'SELECT COUNT() FROM ' + objectName);
-      totalRecords = countResult.totalSize ?? 0;
-    } catch (err: any) {
-      this.errors.push(`${objectName} COUNT: ${err.message}`);
-    }
-
-    if (totalRecords > 0) {
-      const scoringTasks = scorable.map((field) => async () => {
-        try {
-          const result = await withRetry(
-            () => this.queryObject(objectName, `SELECT COUNT(Id) cnt FROM ${objectName} WHERE ${field.name} != null`),
-            `${objectName}.${field.name}`,
-          );
-          const count = (result.records?.[0] as any)?.cnt ?? 0;
-          field.populationPct = Math.round((count / totalRecords) * 100);
-        } catch {
-          // Non-fatal: field just won't have population data
-        }
-      });
-      await parallelLimit(scoringTasks, SCORING_BATCH_SIZE);
-    }
+    const { totalRecords, sampledRecords } = await this.scoreFromSample(objectName, candidates);
     const scoringMs = Date.now() - scoringStart;
 
     // 4. Regulate and rank
@@ -242,7 +262,92 @@ export class FieldDiscovery {
       scoringMs,
       totalFields: candidates.length,
       totalRecords,
+      sampledRecords,
     };
+  }
+
+  /**
+   * Score every candidate from one stratified sample of records (ADR-301).
+   *
+   * Costs a query per stratum rather than a query per field: a wide projection
+   * reads every selectable field at once, and the distribution is computed in
+   * memory. The sample carries values, so a boolean can be scored by how it
+   * splits and a field's usage can be tracked across time — neither of which a
+   * `COUNT(... WHERE f != null)` can see.
+   *
+   * Mutates `candidates` with populationPct / strataPopulation / trend, and
+   * reports what it drew from.
+   */
+  private async scoreFromSample(
+    objectName: string,
+    candidates: FieldCandidate[],
+  ): Promise<{ totalRecords: number; sampledRecords: number }> {
+    // One aggregate answers both "how many?" and "over what span?".
+    let totalRecords = 0;
+    let spanFrom = NaN;
+    let spanTo = NaN;
+    try {
+      const agg = await this.queryObject(
+        objectName,
+        `SELECT COUNT(Id) total, MIN(CreatedDate) spanFrom, MAX(CreatedDate) spanTo FROM ${objectName}`,
+      );
+      const row = (agg.records?.[0] ?? {}) as any;
+      totalRecords = row.total ?? 0;
+      spanFrom = Date.parse(row.spanFrom);
+      spanTo = Date.parse(row.spanTo);
+    } catch (err: any) {
+      this.errors.push(`${objectName} sample probe: ${err.message}`);
+      return { totalRecords: 0, sampledRecords: 0 };
+    }
+
+    if (totalRecords === 0) return { totalRecords, sampledRecords: 0 };
+
+    // Only fields population is a meaningful question for. A non-nillable field
+    // is 100% populated by definition — a fact about the schema that says
+    // nothing about use — so it stays unscored, as it always has (ADR-300).
+    // Flags are the exception: never null, but how they split is real evidence.
+    const scorable = candidates.filter(f =>
+      (f.nillable && isScorable(f.type)) || f.computationType === 'flag');
+    if (scorable.length === 0) return { totalRecords, sampledRecords: 0 };
+
+    // A wide SELECT can't carry compound, binary or long-text fields.
+    const projectable = candidates.filter(f => !SAMPLE_EXCLUDED_TYPES.includes(f.type.toLowerCase()));
+    const projection = projectable.map(f => f.name).join(', ');
+    if (!projection) return { totalRecords, sampledRecords: 0 };
+
+    const strata = planStrata(spanFrom, spanTo);
+    const iso = (ms: number) => new Date(ms).toISOString().replace(/\.\d{3}Z$/, 'Z');
+
+    const samples: Array<Array<Record<string, unknown>>> = strata.map(() => []);
+    const tasks = strata.map((stratum, i) => async () => {
+      const bounds = [`CreatedDate >= ${iso(stratum.from)}`];
+      if (stratum.to !== undefined) bounds.push(`CreatedDate < ${iso(stratum.to)}`);
+      const soql =
+        `SELECT ${projection} FROM ${objectName} ` +
+        `WHERE ${bounds.join(' AND ')} LIMIT ${stratum.limit}`;
+      try {
+        const res = await withRetry(() => this.queryObject(objectName, soql), `${objectName} stratum ${i}`);
+        samples[i] = (res.records ?? []) as Array<Record<string, unknown>>;
+      } catch (err: any) {
+        // A window that fails leaves a gap in the trend, not a broken catalog.
+        this.errors.push(`${objectName} stratum ${i}: ${err.message}`);
+      }
+    });
+    await parallelLimit(tasks, SCORING_BATCH_SIZE);
+
+    const drawn = samples.filter(s => s.length > 0);
+    if (drawn.length === 0) return { totalRecords, sampledRecords: 0 };
+
+    for (const field of scorable) {
+      const isFlag = field.computationType === 'flag';
+      field.populationPct = pooledPopulation(samples, field.name, isFlag);
+      // Only windows that returned records describe an era; an empty one is a
+      // gap in the evidence, not a field nobody filled in.
+      field.strataPopulation = drawn.map(s => populationIn(s, field.name, isFlag));
+      field.trend = trendFrom(field.strataPopulation);
+    }
+
+    return { totalRecords, sampledRecords: samples.reduce((a, s) => a + s.length, 0) };
   }
 
   /** Enforce global budget — demote lowest-scoring promoted fields across objects. */

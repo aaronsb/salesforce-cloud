@@ -27,7 +27,7 @@ function catalog(objectName: string, fields: ScoredField[]): ObjectCatalog {
   return {
     objectName, fields, promoted: fields.filter(f => f.promoted),
     wellKnown: new Map(), describeMs: 0, scoringMs: 0,
-    totalFields: fields.length, totalRecords: 100,
+    totalFields: fields.length, totalRecords: 100, sampledRecords: 100,
   };
 }
 

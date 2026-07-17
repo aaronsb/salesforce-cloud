@@ -32,6 +32,7 @@ function catalog(objectName: string, fieldNames: string[], totalFields?: number)
     scoringMs: 1,
     totalFields: totalFields ?? fieldNames.length,
     totalRecords: 100,
+    sampledRecords: 100,
   };
 }
 

@@ -98,7 +98,7 @@ describe('Query Handlers', () => {
             score: 90, adjustments: [], promoted: true,
           }],
           wellKnown: new Map(),
-          describeMs: 1, scoringMs: 1, totalFields: 87, totalRecords: 100,
+          describeMs: 1, scoringMs: 1, totalFields: 87, totalRecords: 100, sampledRecords: 100,
         } : undefined,
       };
 
