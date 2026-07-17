@@ -27,7 +27,7 @@ jest.mock('jsforce', () => ({
   Connection: jest.fn().mockImplementation(() => conn),
 }));
 
-import { SalesforceServer } from '../index';
+import { SalesforceServer, shouldAutostart } from '../index';
 
 let errSpy: jest.SpyInstance;
 const originalEnv = process.env;
@@ -203,5 +203,25 @@ describe('SalesforceServer startup', () => {
 
       expect(server['server']['_capabilities'].resources).toMatchObject({ listChanged: true });
     });
+  });
+});
+
+// Regression guard for the v0.7.2 fix. The extension failed to start under
+// Claude Desktop's Electron UtilityProcess because startup was gated on
+// `require.main === module`, which is false there. The gate must depend on Jest
+// only, so the server starts in every real runtime (node CLI, npx, and the
+// UtilityProcess where require.main !== module) and stays quiet under tests.
+describe('shouldAutostart', () => {
+  it('starts in a real runtime regardless of require.main (UtilityProcess case)', () => {
+    expect(shouldAutostart({})).toBe(true);
+  });
+
+  it('does not start when imported by the Jest test suite', () => {
+    expect(shouldAutostart({ JEST_WORKER_ID: '1' })).toBe(false);
+  });
+
+  it('is not running a server inside this very test process', () => {
+    // We are under Jest, so the module-load autostart must have been suppressed.
+    expect(shouldAutostart()).toBe(false);
   });
 });

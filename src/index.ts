@@ -394,9 +394,25 @@ class SalesforceServer {
 
 export { SalesforceServer };
 
-// Only start a server when run as the entrypoint, so tests can import the
-// class without binding stdio or opening a Salesforce connection.
-if (require.main === module) {
+/**
+ * Whether to auto-start the server when this module is loaded.
+ *
+ * This deliberately does NOT gate on `require.main === module`. Under Claude
+ * Desktop's built-in Node (Electron UtilityProcess) the entry module is loaded
+ * such that `require.main !== module`, so that guard silently skipped startup:
+ * the server never constructed, the MCP handshake was never answered, and the
+ * extension failed with "unable to connect" — while the exact same build worked
+ * as a plain `node`/`npx` CLI (where `require.main === module` holds). Jest is
+ * the only context that imports this module without wanting a running server,
+ * so gate on that instead. See the release notes for v0.7.2.
+ */
+export function shouldAutostart(
+  env: Record<string, string | undefined> = process.env,
+): boolean {
+  return !env.JEST_WORKER_ID;
+}
+
+if (shouldAutostart()) {
   const server = new SalesforceServer();
-  server.run().catch(console.error);
+  server.run().catch((error) => console.error('Fatal error running server:', error));
 }
