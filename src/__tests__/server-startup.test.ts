@@ -62,6 +62,21 @@ describe('SalesforceServer startup', () => {
     expect(conn.login).toHaveBeenCalledTimes(1);
   });
 
+  // The regression this guards: eager warmup() in the constructor did network
+  // I/O before the MCP handshake finished, which under Claude Desktop's built-in
+  // Node (Electron UtilityProcess) raced the initialize response and hung the
+  // connection. Auth must not start until run() defers it to the post-initialize
+  // hook. Construction — and time passing — must touch nothing on the wire.
+  it('does not authenticate on construction', async () => {
+    const server = new SalesforceServer();
+    jest.spyOn(server['fieldDiscovery'], 'startAsync').mockImplementation(() => {});
+
+    await new Promise(process.nextTick);
+
+    expect(conn.login).not.toHaveBeenCalled();
+    expect(conn.authorize).not.toHaveBeenCalled();
+  });
+
   it('does not authenticate again when a tool call follows startup', async () => {
     const server = new SalesforceServer();
     jest.spyOn(server['fieldDiscovery'], 'startAsync').mockImplementation(() => {});

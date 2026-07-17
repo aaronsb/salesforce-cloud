@@ -74,7 +74,11 @@ class SalesforceServer {
     );
 
     this.sfClient = new SalesforceClient();
-    this.sfClient.warmup();
+    // Auth warmup is NOT kicked off here. Doing network I/O this early — before
+    // the client has finished the MCP handshake — races the initialize response
+    // on stdout under Claude Desktop's UtilityProcess runtime and can leave the
+    // handshake unanswered ("unable to connect"). run() defers it to the
+    // post-initialize hook instead; see run().
     this.cache = new SessionCache();
     this.cacheMiddleware = new CacheMiddleware(this.cache);
     this.fieldDiscovery = new FieldDiscovery(this.sfClient);
@@ -362,14 +366,29 @@ class SalesforceServer {
   }
 
   async run() {
-    // Connect MCP transport FIRST so the handshake completes immediately.
-    // Salesforce auth happens lazily on the first tool call — if it fails
-    // or hangs, it shouldn't block the MCP initialize/capabilities exchange.
+    // Defer all Salesforce work (auth warmup + field discovery) until AFTER the
+    // client acknowledges the handshake with notifications/initialized. Firing
+    // it in the constructor or right after connect() puts network I/O in the
+    // same tick window as the initialize response; under Claude Desktop's
+    // built-in Node (Electron UtilityProcess) that race can leave the response
+    // unflushed, so the client times out with "unable to connect". Waiting for
+    // the initialized notification lets the handshake settle on a quiet event
+    // loop first.
+    //
+    // The convergence contract still holds: warmup() kicks off auth, background
+    // init runs discovery and announces the resource-list refetch — just a beat
+    // later. And auth stays lazy-safe: every tool handler calls
+    // ensureInitialized(), so data converges on first use even if a client never
+    // sends the initialized notification. Set before connect() so the handler is
+    // registered when the notification arrives.
+    this.server.oninitialized = () => {
+      this.sfClient.warmup();
+      this.startBackgroundInit();
+    };
+
     const transport = new StdioServerTransport();
     await this.server.connect(transport);
     console.error('Salesforce MCP server running on stdio');
-
-    this.startBackgroundInit();
   }
 }
 
