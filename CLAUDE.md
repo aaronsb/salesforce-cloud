@@ -11,7 +11,7 @@
 
 ## Distribution
 
-npm package (`npx salesforce-cloud`). `manifest.json` for .mcpb bundles.
+npm package (`npx @aaronsb/salesforce-cloud-mcp`). `manifest.json` for .mcpb bundles.
 
 ## Environment
 

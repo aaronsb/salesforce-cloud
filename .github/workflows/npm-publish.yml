@@ -1,53 +1,118 @@
-name: Publish to npm
+# Publish to npm and the MCP Registry, both by GitHub OIDC. See
+# google-workspace-mcp ADR-105 for the reasoning.
+#
+# THE FILENAME IS LOAD-BEARING, and is why a file that publishes two channels is
+# still called npm-publish.yml. npmjs.com registers a trusted publisher against a
+# repository AND a workflow filename; this file is registered as `npm-publish.yml`.
+# Rename or move it and npm stops recognising the identity, with nothing in this
+# repo to explain why.
+#
+# There is deliberately no NPM_TOKEN, no NODE_AUTH_TOKEN, and no `registry-url:` on
+# setup-node — that input exists to write a token into .npmrc, which is what this
+# replaces. An earlier version of this workflow published from a long-lived token;
+# it expired in June 2026 and silently broke the v0.6.0 and v0.7.0 releases. OIDC
+# has no secret to expire.
+#
+# The two channels differ in how the identity is granted. npm matches a publisher
+# the package owner registered on npmjs.com. The MCP Registry reads the
+# `repository_owner` claim out of the OIDC token and grants `io.github.<owner>/*`
+# from that alone — so it needs no registry-side configuration, and equally offers
+# no registry-side protection if this repository's owner ever changes.
+name: Publish to npm and the MCP Registry
 
 on:
   push:
-    tags:
-      - 'v*'
+    tags: ['v*']
 
 jobs:
   publish:
     name: Publish to npm
     runs-on: ubuntu-latest
-
     permissions:
       contents: read
-      id-token: write # trusted publishing (OIDC) and provenance
-
+      id-token: write   # mints the OIDC token npm verifies. Without it, publish is unauthenticated.
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
-          node-version: '22'
+          node-version: '24'
           cache: 'npm'
-          registry-url: 'https://registry.npmjs.org'
 
-      # Node 22 bundles npm 10.x, which predates trusted publishing — it ignores
-      # OIDC and looks for a token instead. Trusted publishing needs npm 11.5.1+.
-      - name: Upgrade npm to a version that supports trusted publishing
-        run: npm install -g npm@latest
+      # Node 24 ships an npm 11.x that is usually new enough, and Node 22 shipped
+      # npm 10.x which is not. Neither is a promise: the bundled npm moves with the
+      # Node patch the runner happens to have. An npm below the floor does not
+      # report a missing feature — it looks for a token, finds none, and fails with
+      # a 401 that says nothing about OIDC. So upgrade, then assert.
+      - name: Upgrade npm past the trusted-publishing floor
+        run: |
+          npm install -g npm@latest
+          V=$(npm --version)
+          echo "npm $V"
+          node -e '
+            const v = process.argv[1];
+            const [maj, min, pat] = v.split(".").map(Number);
+            const ok = maj > 11 || (maj === 11 && (min > 5 || (min === 5 && pat >= 1)));
+            if (!ok) {
+              console.error(`npm ${v} is below the 11.5.1 trusted-publishing floor — publish would fall back to token auth and 401.`);
+              process.exit(1);
+            }
+          ' "$V"
 
       - name: Install dependencies
         run: npm ci
 
+      # The tag is not evidence that anything was checked. Run the gates against
+      # the commit actually being published, in a clean checkout.
+      - name: Lint
+        run: npm run lint
+
+      - name: Test
+        run: npm test
+
       - name: Build
         run: npm run build
 
-      # No NODE_AUTH_TOKEN. This publishes via trusted publishing, exchanging
-      # the workflow's OIDC identity for a short-lived credential — a token, if
-      # present, would take precedence and defeat it.
-      #
-      # Requires a trusted publisher configured on npmjs.com for this package,
-      # naming this repository and this workflow file. Without that, publish
-      # fails on auth.
-      #
-      # This is what bit v0.6.0 and v0.7.0: NPM_TOKEN expired in June and the
-      # job failed silently for a month, because nothing was released in
-      # between. A token is a credential that rots; OIDC is one that doesn't.
+      # A PRE-RELEASE must not become `latest`. `npm publish` with no --tag
+      # publishes as `latest`, which every `npm install` and every `^x.y.z` range
+      # picks up.
+      - name: Determine npm dist-tag
+        id: npm-tag
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          if echo "$VERSION" | grep -qE '(alpha|beta|rc)'; then
+            echo "tag=$(echo "$VERSION" | grep -oE '(alpha|beta|rc)' | head -1)" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=latest" >> "$GITHUB_OUTPUT"
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      # The tag names one version; package.json names another. Publishing on a
+      # mismatch ships whatever package.json says under a tag that claims
+      # something else.
+      - name: Check the tag matches package.json
+        run: |
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          PKG_VERSION="${{ steps.npm-tag.outputs.version }}"
+          if [ "$TAG_VERSION" != "$PKG_VERSION" ]; then
+            echo "tag $GITHUB_REF_NAME says $TAG_VERSION, package.json says $PKG_VERSION."
+            exit 1
+          fi
+          echo "tag $GITHUB_REF_NAME matches package.json $PKG_VERSION"
+
+      # An npm version is permanent, so a re-run of this job on an already-published
+      # version must be a no-op rather than a red X on a release that actually
+      # succeeded.
       - name: Publish to npm
-        run: npm publish --provenance --access public
+        run: |
+          PKG=$(node -p "require('./package.json').name")
+          VERSION="${{ steps.npm-tag.outputs.version }}"
+          if npm view "$PKG@$VERSION" version >/dev/null 2>&1; then
+            echo "$PKG@$VERSION is already on the registry — nothing to publish."
+            exit 0
+          fi
+          npm publish --provenance --access public --tag "${{ steps.npm-tag.outputs.tag }}"
 
       # A failed publish is easy to miss: it lives in a different workflow from
       # the tag push, and the .mcpb release succeeds beside it, so the release
@@ -68,3 +133,69 @@ jobs:
           done
           echo "FATAL: npm does not serve $PKG@$TAG after a reported-successful publish"
           exit 1
+
+  mcp-registry:
+    name: Publish to the MCP Registry
+    runs-on: ubuntu-latest
+    # server.json advertises the npm package AT THIS VERSION, so publishing the
+    # registry entry first would point people at a tarball that does not exist
+    # yet. `needs` is the ordering; it is not decoration.
+    needs: publish
+    permissions:
+      contents: read
+      id-token: write   # same OIDC token as the npm job; mcp-publisher reads it from the runner
+    steps:
+      - uses: actions/checkout@v7
+
+      # Pinned deliberately. This runs on tag push, where a surprise upstream
+      # change breaks a release at the worst possible moment and there is no green
+      # build to compare against. Bump it on purpose, not by drifting onto `latest`.
+      - name: Install mcp-publisher
+        env:
+          MCP_PUBLISHER_VERSION: '1.8.1'
+        run: |
+          curl -fsSL -o mcp-publisher.tar.gz \
+            "https://github.com/modelcontextprotocol/registry/releases/download/v${MCP_PUBLISHER_VERSION}/mcp-publisher_linux_amd64.tar.gz"
+          tar -xzf mcp-publisher.tar.gz mcp-publisher
+          ./mcp-publisher --version
+
+      # server.json carries the version TWICE — once for the server entry and once
+      # for the npm package it points at — and version-sync writes only what it
+      # knows about. A mismatch here publishes a registry entry naming the wrong
+      # tarball, which no amount of npm-side checking would catch.
+      - name: Check server.json agrees with the tag
+        run: |
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          SERVER_VERSION=$(node -p "require('./server.json').version")
+          PKG_VERSION=$(node -p "require('./server.json').packages[0].version")
+          fail=0
+          [ "$SERVER_VERSION" = "$TAG_VERSION" ] || { echo "server.json version is $SERVER_VERSION, tag says $TAG_VERSION"; fail=1; }
+          [ "$PKG_VERSION" = "$TAG_VERSION" ] || { echo "server.json packages[0].version is $PKG_VERSION, tag says $TAG_VERSION"; fail=1; }
+          [ "$fail" = 0 ] || { echo "Run 'make version-sync' and commit the result."; exit 1; }
+          echo "server.json and its npm package both say $TAG_VERSION"
+
+      - name: Authenticate by GitHub OIDC
+        # No secret. The registry validates the token's issuer and audience, then
+        # grants io.github.<repository_owner>/* from the `repository_owner` claim.
+        run: ./mcp-publisher login github-oidc
+
+      # Same reasoning as the npm step: a re-run on an already-published version
+      # must be a no-op rather than a red X on a release that already succeeded.
+      - name: Publish to the MCP Registry
+        run: |
+          NAME=$(node -p "require('./server.json').name")
+          VERSION="${GITHUB_REF_NAME#v}"
+          published=$(curl -fsSL "https://registry.modelcontextprotocol.io/v0/servers?search=${NAME}&limit=100" \
+            | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{
+                const j=JSON.parse(s);
+                const vs=(j.servers||[]).map(x=>x.version||(x.server&&x.server.version)).filter(Boolean);
+                console.log(vs.join(" "));
+              })')
+          echo "already on the registry: ${published:-<none>}"
+          for v in $published; do
+            if [ "$v" = "$VERSION" ]; then
+              echo "$NAME $VERSION is already published — nothing to do."
+              exit 0
+            fi
+          done
+          ./mcp-publisher publish server.json
