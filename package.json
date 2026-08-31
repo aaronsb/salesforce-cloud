@@ -1,7 +1,7 @@
 {
   "name": "@aaronsb/salesforce-cloud-mcp",
   "mcpName": "io.github.aaronsb/salesforce-cloud",
-  "version": "0.8.0",
+  "version": "0.8.1",
   "description": "AI-powered Salesforce MCP server: opportunity intelligence, similar-deal mining, conversation analysis, business case generation, SOQL, analytics, and CRUD with natural language interaction",
   "author": "aaronsb",
   "license": "MIT",
