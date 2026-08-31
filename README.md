@@ -74,10 +74,10 @@ The Model Context Protocol (MCP) is a standardized way for AI models to interact
 
 ```bash
 # Run directly with npx
-npx salesforce-cloud
+npx @aaronsb/salesforce-cloud-mcp
 
 # Or install globally
-npm install -g salesforce-cloud
+npm install -g @aaronsb/salesforce-cloud-mcp
 ```
 
 ### From Source

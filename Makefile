@@ -74,9 +74,13 @@ _release-commit:
 	git push && git push --tags
 	@echo ""
 	@echo ""
-	@echo "Released v$(NEW_VERSION)."
-	@echo "  npm: publishing automatically via GitHub Actions trusted publisher"
-	@echo "  Run 'make publish-all' for MCPB bundle + MCP Registry + GitHub Release"
+	@echo "Released v$(NEW_VERSION). The tag push publishes it — npm, the MCP Registry"
+	@echo "and the GitHub Release all go out from CI by OIDC. Nothing to run."
+	@echo ""
+	@echo "  gh run list --limit 3     # both workflows should be green"
+	@echo ""
+	@echo "'make publish-all' is the fallback for when CI cannot do it, and running it"
+	@echo "now would republish what CI already shipped."
 
 # ── Publishing ──────────────────────────────────────────────────────────
 
@@ -91,18 +95,25 @@ mcpb: build     ## Build .mcpb desktop extension bundle
 	@echo ""
 	@echo "Built: salesforce-cloud-mcp.mcpb ($$(du -h salesforce-cloud-mcp.mcpb | cut -f1))"
 
-publish-all: mcpb  ## Build MCPB, publish to MCP Registry (npm + GitHub Release via CI)
+# CI publishes all three channels on tag push (npm-publish.yml and
+# release-mcpb.yml). This target is the fallback for when CI cannot do it, and
+# it runs the same identity gate and idempotent registry publish as CI — a
+# fallback runs precisely when something already went wrong, so it needs the
+# guards more than CI does, and a half-succeeded CI run (registry published,
+# upload failed) must not die on the duplicate registry publish before
+# reaching the upload.
+publish-all: mcpb  ## Manual fallback: registry + MCPB upload (CI does all of this on tag push)
 	@echo ""
-	@echo "Publishing v$(VERSION):"
-	@echo "  - npm: automatic via CI (triggered by tag push)"
-	@echo "  - GitHub Release + .mcpb: automatic via CI (triggered by tag push)"
-	@echo "  - MCP Registry: manual (below)"
+	@echo "Publishing v$(VERSION) manually — CI publishes npm, the registry, and the release on tag push."
+	@echo "  1. MCP Registry (requires GitHub auth)"
+	@echo "  2. Upload MCPB to GitHub Release"
 	@echo ""
 	@read -p "Continue? [y/N] " confirm && [ "$$confirm" = "y" ] || (echo "Aborted." && exit 1)
+	node scripts/check-publish-identity.cjs "v$(VERSION)"
 	@echo ""
 	@echo "── MCP Registry ──"
 	mcp-publisher login github
-	mcp-publisher publish server.json
+	bash scripts/mcp-registry-publish.sh
 	@echo ""
 	@echo "── GitHub Release ──"
 	@echo "Uploading .mcpb to existing release (created by CI)..."
