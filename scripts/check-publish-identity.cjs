@@ -39,6 +39,12 @@ if (server.packages[0].identifier !== pkg.name) {
     `server.json packages[0].identifier is ${server.packages[0].identifier}, package.json name is ${pkg.name}`
   );
 }
+// The MCP Registry rejects descriptions over 100 characters with a 422 — after
+// npm has already published, leaving the channels half-released (v0.8.1).
+const descLen = [...(server.description || '')].length;
+if (descLen > 100) {
+  failures.push(`server.json description is ${descLen} characters; the MCP Registry caps it at 100`);
+}
 
 if (failures.length > 0) {
   for (const f of failures) console.error(`FATAL: ${f}`);

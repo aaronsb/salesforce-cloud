@@ -1,7 +1,7 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.aaronsb/salesforce-cloud",
-  "description": "AI-powered Salesforce CRM integration — opportunity intelligence, similar-deal mining, conversation analysis, business case generation, SOQL, analytics, file downloads",
+  "description": "AI-powered Salesforce CRM: opportunity intelligence, conversation analysis, SOQL, analytics",
   "title": "Salesforce Cloud",
   "websiteUrl": "https://github.com/aaronsb/salesforce-cloud#readme",
   "repository": {
