@@ -70,6 +70,10 @@ _release-commit:
 	@git show HEAD:src/version.ts | grep -q "VERSION = '$(NEW_VERSION)'" \
 	  || { echo "FATAL: release commit has stale version in src/version.ts — not tagging"; exit 1; }
 	@echo "Verified: release commit reports v$(NEW_VERSION) everywhere"
+	# Run the full publish-identity gate (including the registry's 100-char
+	# description cap) BEFORE tagging — a violation caught in CI has already
+	# burned a version number.
+	node scripts/check-publish-identity.cjs "v$(NEW_VERSION)"
 	git tag -a "v$(NEW_VERSION)" -m "v$(NEW_VERSION)"
 	git push && git push --tags
 	@echo ""
