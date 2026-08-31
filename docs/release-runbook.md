@@ -8,10 +8,10 @@ A single `git tag` push triggers two CI workflows:
 
 | Workflow | File | What it does |
 |----------|------|-------------|
-| **Publish to npm** | `.github/workflows/npm-publish.yml` | Builds, publishes to npm with provenance, verifies the registry serves the tag |
-| **Build .mcpb** | `.github/workflows/release-mcpb.yml` | Builds .mcpb bundle, attaches to GitHub Release |
+| **Publish to npm and the MCP Registry** | `.github/workflows/npm-publish.yml` | Gates on the release identity, publishes to npm with provenance, verifies npm serves the tag, then publishes `server.json` to the MCP Registry |
+| **Build .mcpb** | `.github/workflows/release-mcpb.yml` | Gates on the release identity, builds the .mcpb bundle, attaches it to the GitHub Release |
 
-Both npm and mcpb publishing start from the same `v*` tag.
+All three channels publish from the same `v*` tag. Nothing is published by hand.
 
 ### npm auth: trusted publishing, not a token
 
@@ -29,9 +29,12 @@ repo configuration — it does not live in git, so it is worth knowing it exists
 > npmjs.com → the package → Settings → Trusted Publisher → GitHub Actions →
 > repository `aaronsb/salesforce-cloud`, workflow `npm-publish.yml`
 
-Two guards exist because this failure is quiet by nature: the job asserts the
-registry actually serves the tagged version after publishing, and `make
-release-*` refuses to tag if the release commit's version files disagree.
+Three guards exist because this failure is quiet by nature:
+`scripts/check-publish-identity.cjs` refuses to publish unless the tag,
+`package.json`, `server.json`, and both manifests agree — and `server.json`
+names the npm package this repo actually publishes; the job asserts npm
+actually serves the tagged version after publishing; and `make release-*`
+refuses to tag if the release commit's version files disagree.
 
 ## Release Flow
 
@@ -55,23 +58,23 @@ make release-major  # X.0.0 — breaking changes
 
 If `make check` fails, fix it first. Don't skip the check.
 
-### 3. Publish to MCP Registry (manual)
-
-The npm publish and .mcpb GitHub Release are automated by CI — but check that
-the npm job actually went green (`gh run list --limit 3`) rather than assuming.
-It is a separate workflow from the tag push and fails quietly. The MCP Registry
-publish is manual:
+### 3. Verify CI
 
 ```bash
-make publish-all    # builds .mcpb locally, publishes to MCP Registry, creates GitHub Release
+gh run list --limit 3   # npm-publish and release-mcpb should both go green
+gh run watch <run-id>   # watch one
 ```
 
-Or just the registry step:
+Check that both workflows actually went green rather than assuming — a publish
+failure lives in a different workflow from the tag push and is quiet by nature.
+There is nothing to run by hand: npm, the MCP Registry, and the GitHub Release
+all publish from the tag push.
 
-```bash
-mcp-publisher login github
-mcp-publisher publish server.json
-```
+If CI cannot publish (runner outage, auth breakage), `make publish-all` is the
+manual fallback for the registry and the .mcpb upload. It runs the same
+identity gate and the same idempotent registry publish as CI, so running it
+after a half-succeeded CI run finishes what is missing instead of
+double-publishing.
 
 ### 4. Manual release (if make fails)
 
@@ -86,18 +89,14 @@ git tag -a vX.Y.Z -m "vX.Y.Z"
 git push && git push --tags
 ```
 
-### 5. Verify CI
-
-```bash
-gh run list --limit 3   # should show npm-publish running
-gh run watch <run-id>   # watch it
-```
-
-### 6. Verify artifacts
+### 5. Verify artifacts
 
 ```bash
 # npm
 npm view @aaronsb/salesforce-cloud-mcp version
+
+# MCP Registry
+curl -fsSL "https://registry.modelcontextprotocol.io/v0/servers?search=io.github.aaronsb/salesforce-cloud" | head -c 500
 
 # GitHub Release — should have salesforce-cloud-mcp.mcpb attached
 gh release view vX.Y.Z
@@ -161,4 +160,7 @@ server previously reported `0.2.0` while package.json said `0.5.0`.
 |---------|-----|-----------|
 | **npm** | Tag push triggers `.github/workflows/npm-publish.yml` | Yes (CI) |
 | **.mcpb + GitHub Release** | Tag push triggers `.github/workflows/release-mcpb.yml` | Yes (CI) |
-| **MCP Registry** | `mcp-publisher publish server.json` | No (manual) |
+| **MCP Registry** | The `mcp-registry` job in `npm-publish.yml`, after npm succeeds | Yes (CI) |
+
+`make publish-all` is the manual fallback for the registry and the .mcpb
+upload when CI cannot publish.

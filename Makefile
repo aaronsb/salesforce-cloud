@@ -97,7 +97,11 @@ mcpb: build     ## Build .mcpb desktop extension bundle
 
 # CI publishes all three channels on tag push (npm-publish.yml and
 # release-mcpb.yml). This target is the fallback for when CI cannot do it, and
-# running it after a green CI run would republish what CI already shipped.
+# it runs the same identity gate and idempotent registry publish as CI — a
+# fallback runs precisely when something already went wrong, so it needs the
+# guards more than CI does, and a half-succeeded CI run (registry published,
+# upload failed) must not die on the duplicate registry publish before
+# reaching the upload.
 publish-all: mcpb  ## Manual fallback: registry + MCPB upload (CI does all of this on tag push)
 	@echo ""
 	@echo "Publishing v$(VERSION) manually — CI publishes npm, the registry, and the release on tag push."
@@ -105,10 +109,11 @@ publish-all: mcpb  ## Manual fallback: registry + MCPB upload (CI does all of th
 	@echo "  2. Upload MCPB to GitHub Release"
 	@echo ""
 	@read -p "Continue? [y/N] " confirm && [ "$$confirm" = "y" ] || (echo "Aborted." && exit 1)
+	node scripts/check-publish-identity.cjs "v$(VERSION)"
 	@echo ""
 	@echo "── MCP Registry ──"
 	mcp-publisher login github
-	mcp-publisher publish server.json
+	bash scripts/mcp-registry-publish.sh
 	@echo ""
 	@echo "── GitHub Release ──"
 	@echo "Uploading .mcpb to existing release (created by CI)..."
