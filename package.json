@@ -2,7 +2,7 @@
   "name": "@aaronsb/salesforce-cloud-mcp",
   "mcpName": "io.github.aaronsb/salesforce-cloud",
   "version": "0.8.0",
-  "description": "A Model Context Protocol server for Salesforce",
+  "description": "AI-powered Salesforce MCP server: opportunity intelligence, similar-deal mining, conversation analysis, business case generation, SOQL, analytics, and CRUD with natural language interaction",
   "author": "aaronsb",
   "license": "MIT",
   "repository": {
@@ -14,6 +14,12 @@
     "mcp",
     "model-context-protocol",
     "salesforce",
+    "crm",
+    "sales",
+    "opportunity",
+    "pipeline",
+    "analytics",
+    "soql",
     "ai",
     "llm",
     "tools"
