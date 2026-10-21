@@ -57,7 +57,37 @@ describe('SalesforceClient', () => {
         clientSecret: 'test-client-secret',
         loginUrl: 'https://test.salesforce.com',
       },
+      refreshFn: expect.any(Function),
     });
+  });
+
+  it('should re-run the client credentials grant when the session expires', async () => {
+    new SalesforceClient();
+    const { refreshFn } = (jsforce.Connection as jest.Mock).mock.calls[0][0];
+    const conn = {
+      accessToken: 'fresh-token',
+      authorize: jest.fn().mockResolvedValue(undefined),
+    };
+    const callback = jest.fn();
+
+    refreshFn(conn, callback);
+    await new Promise(process.nextTick);
+
+    expect(conn.authorize).toHaveBeenCalledWith({ grant_type: 'client_credentials' });
+    expect(callback).toHaveBeenCalledWith(null, 'fresh-token');
+  });
+
+  it('should pass re-authentication failures to jsforce', async () => {
+    new SalesforceClient();
+    const { refreshFn } = (jsforce.Connection as jest.Mock).mock.calls[0][0];
+    const error = new Error('invalid_client');
+    const conn = { authorize: jest.fn().mockRejectedValue(error) };
+    const callback = jest.fn();
+
+    refreshFn(conn, callback);
+    await new Promise(process.nextTick);
+
+    expect(callback).toHaveBeenCalledWith(error);
   });
 
   it('should execute SOQL query successfully', async () => {

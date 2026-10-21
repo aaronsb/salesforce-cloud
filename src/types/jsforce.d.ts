@@ -8,6 +8,7 @@ declare module 'jsforce' {
   export interface ConnectionConfig {
     loginUrl: string;
     oauth2?: OAuth2Config;
+    refreshFn?: (conn: Connection, callback: (err?: Error | null, accessToken?: string) => void) => void;
   }
 
   export interface SObjectCRUD {

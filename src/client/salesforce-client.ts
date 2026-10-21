@@ -31,6 +31,16 @@ export class SalesforceClient {
         clientSecret: this.SF_CLIENT_SECRET,
         loginUrl: this.SF_LOGIN_URL,
       },
+      // Client credentials grants issue no refresh token, so jsforce's default
+      // refresh fails once the session expires and every later call errors.
+      // Re-running the grant gets a fresh token; jsforce then retries the call.
+      // The password flow installs its own refresh delegate in login().
+      refreshFn: (conn, callback) => {
+        console.error('Salesforce session expired, re-authenticating via client credentials');
+        conn.authorize({ grant_type: 'client_credentials' })
+          .then(() => callback(null, conn.accessToken))
+          .catch((err) => callback(err));
+      },
     });
   }
 
